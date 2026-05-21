@@ -187,6 +187,11 @@ export function DeadlineForm() {
             </Select>
           )}
         />
+        {typesQuery.isError && (
+          <p className="text-destructive text-xs" role="alert">
+            Couldn't load deadline types. Refresh the page.
+          </p>
+        )}
         {errors.typeId && (
           <p className="text-destructive text-xs" id="typeId-error">
             {errors.typeId.message}
@@ -225,7 +230,7 @@ export function DeadlineForm() {
       {/* Save button */}
       <Button
         type="submit"
-        disabled={isPending}
+        disabled={isPending || typesQuery.isError || typesQuery.isLoading}
         aria-busy={isPending}
         aria-label={isPending ? 'Saving deadline' : undefined}
         className="w-full min-h-[44px]"
