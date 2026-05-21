@@ -2,17 +2,16 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { deadlineCreateSchema } from '../../shared/schemas/deadline.js'
 import { createDeadline, getAllDeadlines } from '../queries.js'
+import { type AppVariables } from '../middleware/user-context.js'
 
-type AppVariables = { Variables: { user: string } }
-
-export const deadlinesRouter = new Hono<AppVariables>()
+export const deadlinesRouter = new Hono<{ Variables: AppVariables }>()
 
 deadlinesRouter.get('/deadlines', (c) => {
   try {
     const data = getAllDeadlines()
     return c.json(data)
   } catch (_err) {
-    return c.json({ error: { code: 'db_error', message: 'Database read failed' } }, 500)
+    return c.json({ error: { code: 'db_error', message: 'Database read failed.' } }, 500)
   }
 })
 
@@ -27,6 +26,8 @@ deadlinesRouter.post(
     }
   }),
   (c) => {
+    // SAFE-10: read c.get('user') — always 'local' in Phase 1 (wired by userContextMiddleware)
+    const _user = c.get('user')
     const data = c.req.valid('json')
     try {
       const deadline = createDeadline(data)
