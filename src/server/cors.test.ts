@@ -16,6 +16,20 @@ describe('SAFE-08: CORS middleware', () => {
     expect(res.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:3747')
   })
 
+  it('allowed origin http://localhost:5173 receives Access-Control-Allow-Origin header', async () => {
+    const res = await app.request('/api/deadlines', {
+      headers: { Origin: 'http://localhost:5173' },
+    })
+    expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+  })
+
+  it('allowed origin http://localhost:3747 receives Access-Control-Allow-Origin header', async () => {
+    const res = await app.request('/api/deadlines', {
+      headers: { Origin: 'http://localhost:3747' },
+    })
+    expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:3747')
+  })
+
   it('disallowed origin receives no Access-Control-Allow-Origin header', async () => {
     const res = await app.request('/api/deadlines', {
       headers: { Origin: 'http://evil.example.com' },

@@ -8,6 +8,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { toISODateString } from '../shared/lib/date.js'
 import { logger } from './logger.js'
+import { SET_DEADLINES_UPDATED_AT_TRIGGER } from '../../drizzle/schema.js'
 
 /**
  * SAFE-04: Verify all four PRAGMAs are set correctly.
@@ -54,7 +55,10 @@ export function runStartupBackup(sqlite: DatabaseType, backupDir: string): void 
     logger.info(`backup: skipped (already exists for today)`)
   } else {
     // RESEARCH Pitfall 3: VACUUM INTO throws if destination exists — guard above prevents it
-    sqlite.exec(`VACUUM INTO '${backupFile}'`)
+    // Escape single quotes in path (SQLite string literal escaping) so that
+    // install paths like C:\Users\O'Brien\... don't break the DDL statement.
+    const escapedPath = backupFile.replace(/'/g, "''")
+    sqlite.exec(`VACUUM INTO '${escapedPath}'`)
     logger.info(`backup: ${backupFile}`)
   }
 
@@ -71,4 +75,25 @@ export function runStartupBackup(sqlite: DatabaseType, backupDir: string): void 
       }
     }
   }
+}
+
+/**
+ * WR-05: Install DDL triggers that SQLite DEFAULT cannot provide.
+ * VACUUM INTO does not support parameterized statements so triggers must be
+ * created separately. CREATE TRIGGER IF NOT EXISTS is idempotent.
+ * Guards against running before schema migration (e.g., fresh test DB) by
+ * checking for the deadlines table first.
+ */
+export function runStartupTriggers(sqlite: DatabaseType): void {
+  const tableExists = sqlite
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='deadlines'")
+    .get()
+
+  if (!tableExists) {
+    logger.info('triggers: skipped — deadlines table not yet created (schema push pending)')
+    return
+  }
+
+  sqlite.exec(SET_DEADLINES_UPDATED_AT_TRIGGER)
+  logger.info('triggers: set_deadlines_updated_at installed')
 }

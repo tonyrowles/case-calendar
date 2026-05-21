@@ -18,3 +18,18 @@ export const deadlines = sqliteTable('deadlines', {
   createdAt: text().notNull().default(sql`(CURRENT_TIMESTAMP)`),
   updatedAt: text().notNull().default(sql`(CURRENT_TIMESTAMP)`),
 })
+
+/**
+ * WR-05: SQLite trigger to auto-update updatedAt on every UPDATE.
+ * DEFAULT (CURRENT_TIMESTAMP) only fires on INSERT; without this trigger any
+ * Phase 2+ edit endpoint that omits SET updatedAt would return a stale value.
+ * Applied by db-init.ts at startup via runStartupTriggers().
+ */
+export const SET_DEADLINES_UPDATED_AT_TRIGGER = `
+  CREATE TRIGGER IF NOT EXISTS set_deadlines_updated_at
+  AFTER UPDATE ON deadlines
+  FOR EACH ROW
+  BEGIN
+    UPDATE deadlines SET updatedAt = CURRENT_TIMESTAMP WHERE id = NEW.id;
+  END
+`

@@ -6,6 +6,8 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'tests/**/*.test.ts'],
     passWithNoTests: true,
+    // Create test DB schema before any test file loads (CR-01: test DB isolation)
+    setupFiles: ['src/server/test-setup.ts'],
   },
   resolve: {
     alias: {

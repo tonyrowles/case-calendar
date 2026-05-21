@@ -3,10 +3,10 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from '../../drizzle/schema.js'
 import path from 'node:path'
 import fs from 'node:fs'
-import { verifyPragmas, runStartupBackup } from './db-init.js'
+import { verifyPragmas, runStartupBackup, runStartupTriggers } from './db-init.js'
 
 // Re-export so callers can import from db.ts (plan interface requirement)
-export { verifyPragmas, runStartupBackup }
+export { verifyPragmas, runStartupBackup, runStartupTriggers }
 
 // Database file: data/deadlines.db (relative to process.cwd())
 // In test runs (Vitest sets VITEST=true) use a separate test DB so npm test
@@ -28,5 +28,6 @@ export const sqlite: DatabaseType = new Database(DB_PATH)
 
 verifyPragmas(sqlite)
 runStartupBackup(sqlite, BACKUP_DIR)
+runStartupTriggers(sqlite)
 
 export const db = drizzle(sqlite, { schema })

@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator'
 import { deadlineCreateSchema } from '../../shared/schemas/deadline.js'
 import { createDeadline, getAllDeadlines } from '../queries.js'
 import { type AppVariables } from '../middleware/user-context.js'
+import { logger } from '../logger.js'
 
 export const deadlinesRouter = new Hono<{ Variables: AppVariables }>()
 
@@ -10,7 +11,8 @@ deadlinesRouter.get('/deadlines', (c) => {
   try {
     const data = getAllDeadlines()
     return c.json(data)
-  } catch (_err) {
+  } catch (err) {
+    logger.error({ err }, 'GET /deadlines failed')
     return c.json({ error: { code: 'db_error', message: 'Database read failed.' } }, 500)
   }
 })
@@ -32,7 +34,8 @@ deadlinesRouter.post(
     try {
       const deadline = createDeadline(data)
       return c.json(deadline, 201)
-    } catch (_err) {
+    } catch (err) {
+      logger.error({ err }, 'POST /deadlines failed')
       return c.json({ error: { code: 'db_error', message: "Couldn't save to database." } }, 500)
     }
   }
