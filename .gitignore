@@ -2,6 +2,11 @@ node_modules/
 dist/
 data/
 !data/.gitkeep
+# Test database artifacts — never commit; always isolated from prod DB
+data/deadlines-test.db
+data/deadlines-test.db-shm
+data/deadlines-test.db-wal
+data/backups-test/
 *.log
 .env*
 drizzle/migrations/

@@ -9,8 +9,15 @@ import { verifyPragmas, runStartupBackup } from './db-init.js'
 export { verifyPragmas, runStartupBackup }
 
 // Database file: data/deadlines.db (relative to process.cwd())
-const DB_PATH = path.join(process.cwd(), 'data', 'deadlines.db')
-export const BACKUP_DIR = path.join(process.cwd(), 'data', 'backups')
+// In test runs (Vitest sets VITEST=true) use a separate test DB so npm test
+// never touches the production database file.
+const IS_TEST = process.env.VITEST === 'true'
+const DB_PATH = IS_TEST
+  ? path.join(process.cwd(), 'data', 'deadlines-test.db')
+  : path.join(process.cwd(), 'data', 'deadlines.db')
+export const BACKUP_DIR = IS_TEST
+  ? path.join(process.cwd(), 'data', 'backups-test')
+  : path.join(process.cwd(), 'data', 'backups')
 
 // Ensure directories exist
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
