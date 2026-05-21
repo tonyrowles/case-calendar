@@ -3,22 +3,23 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from '../../drizzle/schema.js'
 import path from 'node:path'
 import fs from 'node:fs'
+import { verifyPragmas, runStartupBackup } from './db-init.js'
+
+// Re-export so callers can import from db.ts (plan interface requirement)
+export { verifyPragmas, runStartupBackup }
 
 // Database file: data/deadlines.db (relative to process.cwd())
 const DB_PATH = path.join(process.cwd(), 'data', 'deadlines.db')
+export const BACKUP_DIR = path.join(process.cwd(), 'data', 'backups')
 
-// Ensure data directory exists
+// Ensure directories exist
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
+fs.mkdirSync(BACKUP_DIR, { recursive: true })
 
+// Module-level side effects: open DB and run startup tasks
 export const sqlite: DatabaseType = new Database(DB_PATH)
 
-// SAFE-04: Set PRAGMAs for safety and performance.
-// Verification (fail-fast on mismatch) is deferred to Plan 01-02.
-sqlite.pragma('journal_mode = WAL')
-sqlite.pragma('synchronous = NORMAL')
-sqlite.pragma('foreign_keys = ON')
-sqlite.pragma('busy_timeout = 5000')
-
-console.log(`DB opened at ${DB_PATH}`)
+verifyPragmas(sqlite)
+runStartupBackup(sqlite, BACKUP_DIR)
 
 export const db = drizzle(sqlite, { schema })
