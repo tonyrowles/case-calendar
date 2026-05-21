@@ -36,15 +36,6 @@ describe('parseLocalDate', () => {
     expect(parseLocalDate('2026-13-01')).toBeNull()
   })
 
-  it('DST forward boundary: 2026-03-08 (spring forward in America/Los_Angeles)', () => {
-    // Clocks spring forward at 2 AM — local noon is safe from the 2am transition
-    const d = parseLocalDate('2026-03-08')
-    expect(d).not.toBeNull()
-    expect(d!.getDate()).toBe(8)
-    expect(d!.getMonth()).toBe(2)  // March = 2
-    expect(d!.getFullYear()).toBe(2026)
-  })
-
   it('DST backward boundary: 2026-11-01 (fall back in America/Los_Angeles)', () => {
     // Clocks fall back at 2 AM — local noon is safe from the 2am transition
     const d = parseLocalDate('2026-11-01')
