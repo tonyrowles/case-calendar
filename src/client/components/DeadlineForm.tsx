@@ -43,7 +43,8 @@ export function DeadlineForm() {
     register,
     handleSubmit,
     control,
-    formState: { errors, isSubmitting },
+    reset,
+    formState: { errors },
   } = useForm<DeadlineCreate>({
     resolver: zodResolver(deadlineCreateSchema),
     defaultValues: {
@@ -58,6 +59,7 @@ export function DeadlineForm() {
     mutationFn: createDeadline,
     onSuccess: () => {
       setSaveError(null)
+      reset()
       queryClient.invalidateQueries({ queryKey: ['deadlines'] })
     },
     onError: (err: Error) => {
@@ -65,8 +67,10 @@ export function DeadlineForm() {
     },
   })
 
-  function onSubmit(data: DeadlineCreate) {
-    mutation.mutate(data)
+  const isPending = mutation.isPending
+
+  async function onSubmit(data: DeadlineCreate) {
+    await mutation.mutateAsync(data)
   }
 
   return (
@@ -221,12 +225,12 @@ export function DeadlineForm() {
       {/* Save button */}
       <Button
         type="submit"
-        disabled={isSubmitting}
-        aria-busy={isSubmitting}
-        aria-label={isSubmitting ? 'Saving deadline' : undefined}
+        disabled={isPending}
+        aria-busy={isPending}
+        aria-label={isPending ? 'Saving deadline' : undefined}
         className="w-full min-h-[44px]"
       >
-        {isSubmitting ? (
+        {isPending ? (
           <>
             <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
             Saving…
