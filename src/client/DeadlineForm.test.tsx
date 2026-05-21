@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import React from 'react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, cleanup } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { DeadlineForm } from './components/DeadlineForm.js'
 
@@ -9,6 +10,8 @@ vi.mock('./lib/api.js', () => ({
   getDeadlineTypes: vi.fn().mockResolvedValue([]),
   createDeadline: vi.fn().mockResolvedValue({}),
 }))
+
+afterEach(() => cleanup())
 
 function renderWithQuery(ui: React.ReactElement) {
   const queryClient = new QueryClient({
