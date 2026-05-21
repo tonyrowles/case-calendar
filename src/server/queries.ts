@@ -2,6 +2,15 @@ import { db } from './db.js'
 import { deadlines, deadlineTypes } from '../../drizzle/schema.js'
 import { desc } from 'drizzle-orm'
 
+// HOOK-04: Phase 9 wallpaper worker subscribes here
+let onMutationCallback: (() => void) | null = null
+export function onMutation(cb: () => void): void {
+  onMutationCallback = cb
+}
+function notifyMutation(): void {
+  onMutationCallback?.()
+}
+
 export function getAllDeadlines() {
   return db.select().from(deadlines)
     .orderBy(desc(deadlines.createdAt))
@@ -22,7 +31,6 @@ export function createDeadline(input: {
   if (!result) {
     throw new Error('Insert returned no result')
   }
+  notifyMutation()
   return result
 }
-// NOTE: onMutation() hook is added in Plan 01-03 Task HOOK-04.
-// The plan-03 task will edit this file to add the hook around the existing function body.

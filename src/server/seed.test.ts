@@ -1,68 +1,57 @@
 /**
  * Tests for seedDeadlineTypes() — DATA-05
  *
- * Uses the real data/deadlines.db with DELETE FROM deadline_types in beforeEach
- * to isolate each test. The seed function is idempotent so this approach is safe.
- *
- * Note: test isolation relies on DELETE clearing the table before each test.
- * The real DB is used because setting up an in-memory DB would require
- * re-running drizzle-kit push or manually replicating the CREATE TABLE DDL —
- * testing against the actual schema is more reliable.
+ * Uses an in-memory SQLite database with the deadline_types schema
+ * created directly. This avoids concurrent access issues with the
+ * real data/deadlines.db when test files run in parallel.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { sqlite } from './db.js'
+import { describe, it, expect, beforeEach } from 'vitest'
+import Database from 'better-sqlite3'
 import { seedDeadlineTypes } from './seed.js'
 
-// Snapshot of rows before we start messing with the table
-let originalRows: { id: number; name: string; color: string; createdAt: string }[] = []
-
-beforeEach(() => {
-  // Save original rows so we can restore them after each test
-  originalRows = sqlite.prepare('SELECT * FROM deadline_types ORDER BY id').all() as typeof originalRows
-  // Clear table so each test starts fresh
-  sqlite.prepare('DELETE FROM deadline_types').run()
-})
-
-afterEach(() => {
-  // Restore original rows after each test
-  sqlite.prepare('DELETE FROM deadline_types').run()
-  if (originalRows.length > 0) {
-    const insert = sqlite.prepare(
-      'INSERT INTO deadline_types (id, name, color, createdAt) VALUES (?, ?, ?, ?)'
+// Create a fresh in-memory DB for each test to guarantee isolation
+function createTestDb() {
+  const db = new Database(':memory:')
+  // Create the deadline_types table matching the Drizzle schema
+  db.exec(`
+    CREATE TABLE deadline_types (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      color TEXT NOT NULL,
+      "createdAt" TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
     )
-    const insertAll = sqlite.transaction(
-      (rows: typeof originalRows) => {
-        for (const r of rows) insert.run(r.id, r.name, r.color, r.createdAt)
-      }
-    )
-    insertAll(originalRows)
-  }
-})
+  `)
+  return db
+}
 
 describe('seedDeadlineTypes', () => {
   it('seeds exactly 9 rows on empty table', () => {
-    // Verify table is empty
-    const before = sqlite.prepare('SELECT COUNT(*) as c FROM deadline_types').get() as { c: number }
+    const db = createTestDb()
+    const before = db.prepare('SELECT COUNT(*) as c FROM deadline_types').get() as { c: number }
     expect(before.c).toBe(0)
 
-    seedDeadlineTypes()
+    seedDeadlineTypes(db)
 
-    const after = sqlite.prepare('SELECT COUNT(*) as c FROM deadline_types').get() as { c: number }
+    const after = db.prepare('SELECT COUNT(*) as c FROM deadline_types').get() as { c: number }
     expect(after.c).toBe(9)
+    db.close()
   })
 
   it('idempotent: second call inserts 0 additional rows', () => {
-    seedDeadlineTypes()
-    seedDeadlineTypes()
+    const db = createTestDb()
+    seedDeadlineTypes(db)
+    seedDeadlineTypes(db)
 
-    const count = sqlite.prepare('SELECT COUNT(*) as c FROM deadline_types').get() as { c: number }
+    const count = db.prepare('SELECT COUNT(*) as c FROM deadline_types').get() as { c: number }
     expect(count.c).toBe(9)
+    db.close()
   })
 
   it('names and colors match UI-SPEC exactly', () => {
-    seedDeadlineTypes()
+    const db = createTestDb()
+    seedDeadlineTypes(db)
 
-    const rows = sqlite.prepare('SELECT name, color FROM deadline_types').all() as { name: string; color: string }[]
+    const rows = db.prepare('SELECT name, color FROM deadline_types').all() as { name: string; color: string }[]
 
     const expected = [
       { name: 'Filing',                 color: '#1D4ED8' },
@@ -80,26 +69,30 @@ describe('seedDeadlineTypes', () => {
       expected.map(e => expect.objectContaining(e))
     ))
     expect(rows).toHaveLength(9)
+    db.close()
   })
 
   it('re-seeding does not overwrite a manually-edited color', () => {
+    const db = createTestDb()
+
     // Insert Filing with a custom color
-    sqlite.prepare(
+    db.prepare(
       "INSERT INTO deadline_types (name, color) VALUES ('Filing', '#000000')"
     ).run()
 
-    // Seed — should not overwrite the existing 'Filing' row (INSERT OR IGNORE)
-    seedDeadlineTypes()
+    // Seed — INSERT OR IGNORE should leave existing Filing row untouched
+    seedDeadlineTypes(db)
 
-    const filing = sqlite.prepare(
+    const filing = db.prepare(
       "SELECT color FROM deadline_types WHERE name = 'Filing'"
     ).get() as { color: string }
 
     // Filing color should still be the manually-inserted value, NOT the seed value
     expect(filing.color).toBe('#000000')
 
-    // Total rows: 1 Filing (existing) + 8 new (other types) = 9
-    const count = sqlite.prepare('SELECT COUNT(*) as c FROM deadline_types').get() as { c: number }
+    // Total: 1 Filing (existing) + 8 new (other types) = 9
+    const count = db.prepare('SELECT COUNT(*) as c FROM deadline_types').get() as { c: number }
     expect(count.c).toBe(9)
+    db.close()
   })
 })
