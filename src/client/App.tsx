@@ -12,8 +12,8 @@ export function App() {
           <DeadlineForm />
         </section>
 
-        <section className="rounded-lg border bg-card mt-8 p-6">
-          <h2 className="text-xl font-semibold mb-4">Saved Deadlines</h2>
+        <section className="rounded-lg border bg-card mt-8">
+          <h2 className="text-xl font-semibold px-4 pt-4 pb-2">Saved Deadlines</h2>
           <DeadlinesTable />
         </section>
       </main>

@@ -84,7 +84,7 @@ export function DeadlineForm() {
       {/* Date + Case row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Date field — Popover + Calendar */}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="date-trigger" className="text-sm font-semibold">
             Date
           </Label>
@@ -131,7 +131,7 @@ export function DeadlineForm() {
         </div>
 
         {/* Case field */}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="caseLabel" className="text-sm font-semibold">
             Case
           </Label>
@@ -151,7 +151,7 @@ export function DeadlineForm() {
       </div>
 
       {/* Type field — full width */}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <Label htmlFor="type-trigger" className="text-sm font-semibold">
           Type
         </Label>
@@ -195,7 +195,7 @@ export function DeadlineForm() {
       </div>
 
       {/* Description field — full width */}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <Label htmlFor="description" className="text-sm font-semibold">
           Description
         </Label>

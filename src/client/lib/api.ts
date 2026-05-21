@@ -22,7 +22,7 @@ export async function createDeadline(input: DeadlineCreate): Promise<Deadline> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw new Error(body?.error?.message ?? 'Save failed')
+    throw new Error(body?.error?.message ?? 'Save failed. Check your connection and try again.')
   }
   return res.json()
 }
