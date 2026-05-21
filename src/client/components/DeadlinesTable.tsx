@@ -103,7 +103,7 @@ export function DeadlinesTable() {
                 <span className="inline-flex items-center gap-2">
                   <span
                     className="w-3 h-3 rounded-full inline-block shrink-0"
-                    style={{ backgroundColor: type?.color ?? '#374151' }}
+                    style={{ backgroundColor: type?.color ?? 'var(--muted-foreground)' }}
                     aria-hidden="true"
                   />
                   {type?.name ?? 'Unknown'}
