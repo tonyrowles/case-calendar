@@ -20,3 +20,13 @@ export const deadlineSchema = deadlineCreateSchema.extend({
 
 export type DeadlineCreate = z.infer<typeof deadlineCreateSchema>
 export type Deadline = z.infer<typeof deadlineSchema>
+
+// Minimal type shape for deadline types (full Drizzle inference used on server side)
+export const deadlineTypeSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  color: z.string(),
+  createdAt: z.string(),
+})
+
+export type DeadlineType = z.infer<typeof deadlineTypeSchema>

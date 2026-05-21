@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3'
+import Database, { type Database as DatabaseType } from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from '../../drizzle/schema.js'
 import path from 'node:path'
@@ -10,7 +10,7 @@ const DB_PATH = path.join(process.cwd(), 'data', 'deadlines.db')
 // Ensure data directory exists
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
 
-export const sqlite = new Database(DB_PATH)
+export const sqlite: DatabaseType = new Database(DB_PATH)
 
 // SAFE-04: Set PRAGMAs for safety and performance.
 // Verification (fail-fast on mismatch) is deferred to Plan 01-02.
