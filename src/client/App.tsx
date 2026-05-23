@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DeadlineForm } from './components/DeadlineForm.js'
 import { CalendarView } from './components/calendar/CalendarView.js'
@@ -66,7 +67,15 @@ export function App() {
   return (
     <div className="min-h-screen bg-background">
       <main className={`${mainMaxWidth} mx-auto px-4 py-12`}>
-        <h1 className="text-2xl font-semibold mb-2">Case Calendar</h1>
+        <div className="flex items-baseline justify-between mb-2">
+          <h1 className="text-2xl font-semibold">Case Calendar</h1>
+          <Link
+            to="/settings"
+            className="text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline transition-colors"
+          >
+            Settings
+          </Link>
+        </div>
 
         {/* FilterBar — sticky, above both views */}
         <FilterBar />
