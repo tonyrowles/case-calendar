@@ -94,7 +94,7 @@ export function WallpaperView(): React.JSX.Element {
         width: '7680px',
         height: '2160px',
         overflow: 'hidden',
-        background: '#FFFFFF',
+        background: '#FFFFFF', // allow-hex: wallpaper canvas background (not a type color)
         fontFamily: 'var(--font-sans)',
       }}
       className="p-16"
