@@ -41,7 +41,7 @@ export function TypeFilter(): React.JSX.Element {
           {types.map(t => (
             <label
               key={t.id}
-              role="menuitemcheckbox"
+              role="checkbox"
               aria-checked={filters.typeIds.includes(t.id)}
               className="flex items-center gap-2 px-2 py-2 rounded-sm hover:bg-muted/50 cursor-pointer"
             >
