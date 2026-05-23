@@ -76,8 +76,7 @@ describe('ListView — Wave 0 stubs (VIEW-03, VIEW-05)', () => {
         deadlines={fixtures}
         isLoading={false}
         isError={false}
-        clearFilters={() => {}}
-        filtersActive={false}
+filtersActive={false}
         todayStr={TODAY}
       />,
       qc => {
@@ -108,8 +107,7 @@ describe('ListView — Wave 0 stubs (VIEW-03, VIEW-05)', () => {
         deadlines={fixtures}
         isLoading={false}
         isError={false}
-        clearFilters={() => {}}
-        filtersActive={false}
+filtersActive={false}
         todayStr={TODAY}
       />,
       qc => {
@@ -135,8 +133,7 @@ describe('ListView — Wave 0 stubs (VIEW-03, VIEW-05)', () => {
         deadlines={todayDeadlines}
         isLoading={false}
         isError={false}
-        clearFilters={() => {}}
-        filtersActive={false}
+filtersActive={false}
         todayStr={TODAY}
       />,
       qc => {
@@ -155,8 +152,7 @@ describe('ListView — Wave 0 stubs (VIEW-03, VIEW-05)', () => {
         deadlines={[]}
         isLoading={false}
         isError={false}
-        clearFilters={() => {}}
-        filtersActive={true}
+filtersActive={true}
         todayStr={TODAY}
       />,
       qc => {
@@ -175,8 +171,7 @@ describe('ListView — Wave 0 stubs (VIEW-03, VIEW-05)', () => {
         deadlines={undefined}
         isLoading={true}
         isError={false}
-        clearFilters={() => {}}
-        filtersActive={false}
+filtersActive={false}
         todayStr={TODAY}
       />
     )
@@ -192,8 +187,7 @@ describe('ListView — Wave 0 stubs (VIEW-03, VIEW-05)', () => {
         deadlines={[]}
         isLoading={false}
         isError={false}
-        clearFilters={() => {}}
-        filtersActive={false}
+filtersActive={false}
         todayStr={TODAY}
       />,
       qc => {

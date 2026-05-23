@@ -20,7 +20,6 @@ export interface ListViewProps {
   deadlines: Deadline[] | undefined
   isLoading: boolean
   isError: boolean
-  clearFilters: () => void
   filtersActive: boolean
   todayStr: string
 }
@@ -29,7 +28,6 @@ export function ListView({
   deadlines,
   isLoading,
   isError,
-  clearFilters,
   filtersActive,
   todayStr,
 }: ListViewProps): React.JSX.Element {

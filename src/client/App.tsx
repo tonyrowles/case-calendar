@@ -88,7 +88,6 @@ export function App() {
               deadlines={filteredDeadlines}
               isLoading={deadlinesQuery.isLoading}
               isError={deadlinesQuery.isError}
-              clearFilters={clearAll}
               filtersActive={!isDefault}
               todayStr={todayStr}
             />
