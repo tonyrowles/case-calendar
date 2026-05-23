@@ -44,18 +44,19 @@ export function WallpaperView(): React.JSX.Element {
     [typesQuery.data]
   )
 
-  // new Date() no-arg is allowed — SAFE-03 guard narrows to string-arg forms only
-  const today = new Date()
-  const todayStr = toISODateString(today)
+  // Capture a single Date at component mount so todayStr and days are always consistent.
+  // new Date() no-arg is allowed — SAFE-03 guard narrows to string-arg forms only.
+  const todayRef = useMemo(() => new Date(), [])
+  const todayStr = toISODateString(todayRef)
 
-  // Build the 14-day window from today inclusive
+  // Build the 14-day window from today inclusive, cloning the captured date each iteration.
   const days = useMemo((): string[] => {
     return Array.from({ length: 14 }, (_, i) => {
-      const d = new Date()
+      const d = new Date(todayRef)
       d.setDate(d.getDate() + i)
       return toISODateString(d)
     })
-  }, [todayStr])
+  }, [todayRef])
 
   const deadlines = deadlinesQuery.data ?? []
 
