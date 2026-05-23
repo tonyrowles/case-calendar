@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
 import { getDeadlines } from '@/client/lib/api.js'
 import { toISODateString } from '@/shared/lib/date.js'
+import { classifyDeadline } from '@/shared/lib/buckets.js'
 import { useTypeColors } from '@/client/hooks/useTypeColors.js'
 import { EventPill } from './EventPill.js'
 import { EventPopover, type EventPopoverEvent } from './EventPopover.js'
@@ -53,7 +54,7 @@ export function mapDeadlinesToEvents(
         typeId: d.typeId,
         typeName: typesById.get(d.typeId)?.name ?? 'Unknown',
         description: d.description ?? '',
-        isOverdue: d.date < todayStr,
+        isOverdue: classifyDeadline(d, todayStr) === 'overdue',
       },
     }))
 }
@@ -76,34 +77,46 @@ function dayCellContent(arg: DayCellContentArg) {
 }
 
 export function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todayStrProp }: CalendarViewProps): React.JSX.Element {
+  // When deadlinesProp is provided (Phase 3+ App wires filtered dataset), use it.
+  // When undefined (Phase 2 standalone or tests without prop), fall back to useQuery.
+  // useQuery is always called (hooks must not be conditional) but its data is used only as fallback.
   const deadlinesQuery = useQuery({
     queryKey: ['deadlines'],
     queryFn: getDeadlines,
+    // When deadlinesProp is provided, skip the internal fetch (data is injected from App)
+    enabled: deadlinesProp === undefined,
   })
 
   const { getColor, typesById } = useTypeColors()
 
   // new Date() no-arg is allowed — SAFE-03 guard narrows to string-arg forms only
-  const todayStr = toISODateString(new Date())
+  const todayStr = todayStrProp ?? toISODateString(new Date())
+
+  // When deadlinesProp is provided, use it; otherwise fall back to internal query result
+  const deadlinesData = deadlinesProp ?? (deadlinesQuery.data ?? [])
 
   const events = useMemo(
-    () => mapDeadlinesToEvents(deadlinesQuery.data ?? [], todayStr, typesById),
-    [deadlinesQuery.data, todayStr, typesById]
+    () => mapDeadlinesToEvents(deadlinesData, todayStr, typesById),
+    [deadlinesData, todayStr, typesById]
   )
 
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<EventPopoverEvent | null>(null)
   const virtualAnchorRef = useRef<{ getBoundingClientRect(): DOMRect } | null>(null)
 
+  // Show loading/error only when using the internal query (not when data is injected via prop)
+  const showLoading = deadlinesProp === undefined && deadlinesQuery.isLoading
+  const showError = deadlinesProp === undefined && deadlinesQuery.isError
+
   return (
     <>
-      {deadlinesQuery.isLoading && (
+      {showLoading && (
         <div
           className="h-2 animate-pulse bg-muted rounded mb-4 mx-4"
           aria-label="Loading deadlines"
         />
       )}
-      {deadlinesQuery.isError && (
+      {showError && (
         <ErrorBanner
           message="Couldn't load deadlines. Refresh the page."
           onDismiss={() => deadlinesQuery.refetch()}

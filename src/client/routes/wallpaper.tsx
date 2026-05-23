@@ -4,6 +4,7 @@ import { format } from 'date-fns'
 
 import { getDeadlines } from '@/client/lib/api.js'
 import { parseLocalDate, toISODateString } from '@/shared/lib/date.js'
+import { groupByBucket } from '@/shared/lib/buckets.js'
 import { useTypeColors } from '@/client/hooks/useTypeColors.js'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
 
@@ -51,8 +52,10 @@ export function WallpaperView(): React.JSX.Element {
   const deadlines = deadlinesQuery.data ?? []
 
   // Overdue: completed_at IS NULL AND date < today (strict less-than — today itself is NOT overdue)
+  // Refactored to consume groupByBucket from src/shared/lib/buckets (single source of truth).
+  // groupByBucket returns 'overdue' exactly when d.date < todayStr && d.completedAt === null.
   const overdue = useMemo(
-    () => deadlines.filter(d => d.completedAt === null && d.date < todayStr),
+    () => groupByBucket(deadlines, todayStr).overdue,
     [deadlines, todayStr]
   )
 
