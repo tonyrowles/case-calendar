@@ -114,6 +114,44 @@ describe('TYPE-01..05: /api/deadline-types', () => {
     expect(body.name).toBe('Hearing')
   })
 
+  it('PATCH 409: type_protected — "Other" cannot be renamed (CR-01 bypass guard)', async () => {
+    // "Other" is seeded with id=1 in beforeEach
+    const res = await app.request('/api/deadline-types/1', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Misc' }),
+    })
+    expect(res.status).toBe(409)
+    const body = await res.json() as { error: { code: string; message: string } }
+    expect(body.error.code).toBe('type_protected')
+    expect(body.error.message).toBe('The "Other" type cannot be renamed.')
+  })
+
+  it('PATCH 409: type_protected — case-insensitive "other" cannot be renamed', async () => {
+    const id = seedCustomType('other', '#9CA3AF') // allow-hex: test fixture
+    const res = await app.request(`/api/deadline-types/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'AnotherName' }),
+    })
+    expect(res.status).toBe(409)
+    const body = await res.json() as { error: { code: string } }
+    expect(body.error.code).toBe('type_protected')
+  })
+
+  it('PATCH 200: "Other" recolor allowed — only name is protected', async () => {
+    // "Other" is seeded with id=1 in beforeEach
+    const res = await app.request('/api/deadline-types/1', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ color: '#2563EB' }), // allow-hex: test fixture
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as Record<string, unknown>
+    expect(body.name).toBe('Other')
+    expect(body.color).toBe('#2563EB') // allow-hex: test fixture
+  })
+
   it('PATCH 409: name_taken — rename to existing name returns conflict', async () => {
     seedCustomType('Filing', '#1D4ED8') // allow-hex: test fixture
     const id2 = seedCustomType('Hearing', '#16A34A') // allow-hex: test fixture

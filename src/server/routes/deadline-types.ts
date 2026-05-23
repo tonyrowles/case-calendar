@@ -74,6 +74,17 @@ deadlineTypesRouter.patch(
       return c.json({ error: { code: 'validation_failed', message: 'Invalid id' } }, 400)
     }
     const patch = c.req.valid('json')
+    // TYPE-02-guard: fetch existing type before update to check protection (CR-01)
+    const existing = getDeadlineTypeById(id)
+    if (!existing) {
+      return c.json({ error: { code: 'not_found', message: 'Type not found' } }, 404)
+    }
+    if (existing.name.toLowerCase() === 'other' && patch.name !== undefined) {
+      return c.json(
+        { error: { code: 'type_protected', message: 'The "Other" type cannot be renamed.' } },
+        409
+      )
+    }
     try {
       const updated = updateDeadlineType(id, patch)
       if (!updated) {
