@@ -87,8 +87,11 @@ export function WallpaperView(): React.JSX.Element {
     minute: '2-digit',
   })
 
-  if (deadlinesQuery.isLoading) {
+  if (deadlinesQuery.isLoading || typesQuery.isLoading) {
     return <div className="animate-pulse bg-muted rounded h-4 w-40" />
+  }
+  if (deadlinesQuery.isError || typesQuery.isError) {
+    return <div className="text-red-700 p-8">Failed to load deadlines. Refresh the page.</div>
   }
 
   return (
