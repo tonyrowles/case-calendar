@@ -9,7 +9,12 @@ function computeTier(w: number): Tier {
 }
 
 export function useBreakpoint(): Tier {
-  const [tier, setTier] = useState<Tier>(() => computeTier(window.innerWidth))
+  // SSR-safe initializer: guard window access so the hook doesn't throw in
+  // Node/SSR environments. Falls back to 'one' (narrowest tier) when window
+  // is not available. The useEffect below will correct the value after hydration.
+  const [tier, setTier] = useState<Tier>(() =>
+    typeof window !== 'undefined' ? computeTier(window.innerWidth) : 'one'
+  )
 
   useEffect(() => {
     // Guard against jsdom / environments that do not implement matchMedia
