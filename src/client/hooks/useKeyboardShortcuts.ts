@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 export interface ShortcutHandlers {
   onNewDeadline: () => void       // n
@@ -19,12 +19,21 @@ const TYPING_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
 const TYPING_ROLES = new Set(['option', 'listbox', 'combobox', 'menu', 'menuitem', 'menuitemcheckbox'])
 
 export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
+  // WR-02: use a stable ref so the keydown listener is added only once (on mount)
+  // and removed only once (on unmount). Updating handlersRef.current on every render
+  // means the listener always sees the latest closures without re-registering.
+  const handlersRef = useRef(handlers)
+  // Assign on every render (no dependency array) so handlersRef.current is always fresh.
+  useEffect(() => {
+    handlersRef.current = handlers
+  })
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       // Cmd+K / Ctrl+K — fires even while typing (KBD-09 exception)
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        handlers.onOpenCommandK()
+        handlersRef.current.onOpenCommandK()
         return
       }
 
@@ -47,32 +56,32 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
       switch (e.key) {
         case 'n':
           e.preventDefault()
-          handlers.onNewDeadline()
+          handlersRef.current.onNewDeadline()
           break
         case 'e':
           e.preventDefault()
-          handlers.onEditSelected()
+          handlersRef.current.onEditSelected()
           break
         case 'Delete':
           e.preventDefault()
-          handlers.onDeleteSelected()
+          handlersRef.current.onDeleteSelected()
           break
         case 't':
           e.preventDefault()
-          handlers.onJumpToday()
+          handlersRef.current.onJumpToday()
           break
         case 'j':
           e.preventDefault()
-          handlers.onMoveNext()
+          handlersRef.current.onMoveNext()
           break
         case 'k':
           e.preventDefault()
-          handlers.onMovePrev()
+          handlersRef.current.onMovePrev()
           break
         case '?':
           // T-05-02-03: preventDefault stops browser mid-page search activation (Shift+/)
           e.preventDefault()
-          handlers.onOpenHelp()
+          handlersRef.current.onOpenHelp()
           break
         // Esc is NOT intercepted — Radix overlays handle it themselves (KBD-06, RESEARCH Pitfall 8)
       }
@@ -80,5 +89,5 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [handlers])
+  }, []) // stable — listener registered once, reads current handlers via handlersRef
 }
