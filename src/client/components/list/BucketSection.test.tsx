@@ -46,7 +46,8 @@ describe('BucketSection — Wave 0 stubs (VIEW-03)', () => {
         getColor={getColor}
       />
     )
-    const button = screen.getByRole('button')
+    // Use expanded:true to find the toggle button specifically
+    const button = screen.getByRole('button', { expanded: true })
     expect(button.getAttribute('aria-expanded')).toBe('true')
     // The body region should exist
     const body = document.getElementById('bucket-overdue-body')
@@ -63,7 +64,7 @@ describe('BucketSection — Wave 0 stubs (VIEW-03)', () => {
         getColor={getColor}
       />
     )
-    const button = screen.getByRole('button')
+    const button = screen.getByRole('button', { expanded: true })
     // Initially open
     expect(button.getAttribute('aria-expanded')).toBe('true')
     // Click to collapse

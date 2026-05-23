@@ -10,6 +10,10 @@ export interface BucketSectionProps {
   deadlines: Deadline[]
   typesById: Map<number, DeadlineType>
   getColor: (id: number) => string
+  onRowClick?: (id: number) => void
+  onComplete?: (id: number, completed: boolean) => void
+  onDelete?: (id: number) => void
+  selectedDeadlineId?: number | null
 }
 
 export function BucketSection({
@@ -18,6 +22,10 @@ export function BucketSection({
   deadlines,
   typesById,
   getColor,
+  onRowClick,
+  onComplete,
+  onDelete,
+  selectedDeadlineId,
 }: BucketSectionProps): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(true)
 
@@ -58,6 +66,10 @@ export function BucketSection({
               bucket={bucketId}
               typesById={typesById}
               getColor={getColor}
+              onRowClick={onRowClick}
+              onComplete={onComplete}
+              onDelete={onDelete}
+              selectedDeadlineId={selectedDeadlineId}
             />
           ))}
         </div>

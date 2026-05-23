@@ -22,6 +22,10 @@ export interface ListViewProps {
   isError: boolean
   filtersActive: boolean
   todayStr: string
+  onRowClick?: (id: number) => void
+  onComplete?: (id: number, completed: boolean) => void
+  onDelete?: (id: number) => void
+  selectedDeadlineId?: number | null
 }
 
 export function ListView({
@@ -30,6 +34,10 @@ export function ListView({
   isError,
   filtersActive,
   todayStr,
+  onRowClick,
+  onComplete,
+  onDelete,
+  selectedDeadlineId,
 }: ListViewProps): React.JSX.Element {
   const { typesById, getColor } = useTypeColors()
 
@@ -113,6 +121,10 @@ export function ListView({
           deadlines={buckets[bucketId]}
           typesById={typesById}
           getColor={getColor}
+          onRowClick={onRowClick}
+          onComplete={onComplete}
+          onDelete={onDelete}
+          selectedDeadlineId={selectedDeadlineId}
         />
       ))}
     </div>
