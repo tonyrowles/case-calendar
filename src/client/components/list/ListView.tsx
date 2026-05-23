@@ -26,6 +26,8 @@ export interface ListViewProps {
   onComplete?: (id: number, completed: boolean) => void
   onDelete?: (id: number, onError: () => void) => void
   selectedDeadlineId?: number | null
+  /** Forwarded to each DeadlineRow for keyboard-driven 2-step delete (KBD-03) */
+  deleteTriggerSignal?: { id: number; nonce: number } | null
 }
 
 export function ListView({
@@ -38,6 +40,7 @@ export function ListView({
   onComplete,
   onDelete,
   selectedDeadlineId,
+  deleteTriggerSignal,
 }: ListViewProps): React.JSX.Element {
   const { typesById, getColor } = useTypeColors()
 
@@ -125,6 +128,7 @@ export function ListView({
           onComplete={onComplete}
           onDelete={onDelete}
           selectedDeadlineId={selectedDeadlineId}
+          deleteTriggerSignal={deleteTriggerSignal}
         />
       ))}
     </div>

@@ -12,6 +12,8 @@ export function useBreakpoint(): Tier {
   const [tier, setTier] = useState<Tier>(() => computeTier(window.innerWidth))
 
   useEffect(() => {
+    // Guard against jsdom / environments that do not implement matchMedia
+    if (typeof window.matchMedia !== 'function') return
     const mqTwo = window.matchMedia('(min-width: 1280px)')
     const mqThree = window.matchMedia('(min-width: 1920px)')
     const update = () => setTier(computeTier(window.innerWidth))

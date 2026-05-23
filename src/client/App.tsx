@@ -1,13 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DeadlineForm } from './components/DeadlineForm.js'
 import { CalendarView } from './components/calendar/CalendarView.js'
+import type { CalendarViewHandle } from './components/calendar/CalendarView.js'
 import { ListView } from './components/list/ListView.js'
 import { FilterBar } from './components/filters/FilterBar.js'
+import { PaneLayout } from './components/layout/PaneLayout.js'
+import { ShortcutsDialog } from './components/help/ShortcutsDialog.js'
+import { CommandPaletteShell } from './components/help/CommandPaletteShell.js'
 import { useFilters } from './hooks/useFilters.js'
 import { useDeadlineMutations } from './hooks/useDeadlineMutations.js'
 import { useDocumentTitle } from './hooks/useDocumentTitle.js'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js'
 import { applyFilters } from '@/shared/lib/filters.js'
 import { getDeadlines } from './lib/api.js'
 import { toISODateString } from '@/shared/lib/date.js'
@@ -22,6 +27,15 @@ export function App() {
 
   // Phase 4: selectedDeadlineId — when set, DeadlineForm enters edit mode
   const [selectedDeadlineId, setSelectedDeadlineId] = useState<number | null>(null)
+
+  // Phase 5: keyboard navigation index + help/palette open state
+  const [selectedDeadlineIndex, setSelectedDeadlineIndex] = useState<number | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [commandKOpen, setCommandKOpen] = useState(false)
+  const [deleteTriggerSignal, setDeleteTriggerSignal] = useState<{ id: number; nonce: number } | null>(null)
+
+  // Phase 5: imperative ref to CalendarView for 't' shortcut
+  const calendarRef = useRef<CalendarViewHandle>(null)
 
   useEffect(() => {
     localStorage.setItem('cc-view', view)
@@ -53,20 +67,181 @@ export function App() {
     [deadlinesQuery.data, filters, todayStr]
   )
 
-  // Phase 4: find the selected deadline object for DeadlineForm edit mode
+  // Phase 5: synchronize selectedDeadlineIndex with filteredDeadlines when list or selection changes.
+  // If the previously selected id is still in the list, point to its new position.
+  // If not found and list is non-empty, reset to 0. If list is empty, reset to null.
+  useEffect(() => {
+    if (selectedDeadlineId === null) {
+      setSelectedDeadlineIndex(null)
+      return
+    }
+    const newIdx = filteredDeadlines.findIndex(d => d.id === selectedDeadlineId)
+    if (newIdx !== -1) {
+      setSelectedDeadlineIndex(newIdx)
+    } else if (filteredDeadlines.length > 0) {
+      setSelectedDeadlineIndex(0)
+    } else {
+      setSelectedDeadlineIndex(null)
+    }
+  }, [filteredDeadlines, selectedDeadlineId])
+
+  // Phase 5: selectedDeadline resolved by index (replaces Phase 4 id-based lookup).
+  // DeadlineForm still shows the selected deadline; the index is the canonical highlight key.
   const selectedDeadline = useMemo(
-    () => deadlinesQuery.data?.find(d => d.id === selectedDeadlineId) ?? null,
-    [deadlinesQuery.data, selectedDeadlineId]
+    () => selectedDeadlineIndex !== null ? (filteredDeadlines[selectedDeadlineIndex] ?? null) : null,
+    [filteredDeadlines, selectedDeadlineIndex]
   )
 
   // VIEW-08: count is NOT filter-aware — always reflects all deadlines due today
   useDocumentTitle(deadlinesQuery.data, todayStr)
 
-  const mainMaxWidth = view === 'list' ? 'max-w-2xl' : 'max-w-screen-xl'
+  // Phase 5: helper that sets both id and index atomically.
+  // Pass id=-1 as sentinel to clear selection.
+  const selectDeadline = useCallback((id: number) => {
+    if (id === -1) {
+      setSelectedDeadlineId(null)
+      setSelectedDeadlineIndex(null)
+      return
+    }
+    setSelectedDeadlineId(id)
+    setSelectedDeadlineIndex(filteredDeadlines.findIndex(d => d.id === id))
+  }, [filteredDeadlines])
+
+  // ── Keyboard handlers ────────────────────────────────────────────────────────
+
+  // KBD-01: 'n' — open new-deadline form; DeadlineForm's existing effect focuses caseLabel when
+  // the deadline prop transitions from truthy → null.
+  const onNewDeadline = useCallback(() => {
+    setSelectedDeadlineId(null)
+    setSelectedDeadlineIndex(null)
+  }, [])
+
+  // KBD-02: 'e' — edit selected; form is already in edit mode when selectedDeadline is non-null.
+  // Scroll-into-view polish is deferred to Phase 7.
+  const onEditSelected = useCallback(() => {
+    // no-op when nothing selected; affordance only — form already shows the selected deadline
+  }, [])
+
+  // KBD-03: 'Delete' — prime the 2-step delete on the selected row via deleteTriggerSignal.
+  const onDeleteSelected = useCallback(() => {
+    if (selectedDeadlineIndex === null) return
+    const id = filteredDeadlines[selectedDeadlineIndex]?.id
+    if (id != null) {
+      setDeleteTriggerSignal({ id, nonce: Date.now() })
+    }
+  }, [selectedDeadlineIndex, filteredDeadlines])
+
+  // KBD-04: 't' — jump calendar to today. If calendar is not mounted (tier='one', view='list'),
+  // switch to calendar view first; user can press 't' again once it mounts.
+  const onJumpToday = useCallback(() => {
+    if (calendarRef.current) {
+      calendarRef.current.jumpToToday()
+    } else {
+      // Calendar not mounted; switch to calendar view so it mounts on next render
+      setView('calendar')
+    }
+  }, [])
+
+  // KBD-05: 'j' — advance selection by one, clamped at list top boundary.
+  const onMoveNext = useCallback(() => {
+    if (filteredDeadlines.length === 0) return
+    setSelectedDeadlineIndex(prev => {
+      const newIdx = prev === null ? 0 : Math.min(prev + 1, filteredDeadlines.length - 1)
+      setSelectedDeadlineId(filteredDeadlines[newIdx]?.id ?? null)
+      return newIdx
+    })
+  }, [filteredDeadlines])
+
+  // KBD-05: 'k' — advance selection by one backward, clamped at 0.
+  const onMovePrev = useCallback(() => {
+    if (filteredDeadlines.length === 0) return
+    setSelectedDeadlineIndex(prev => {
+      const newIdx = prev === null ? 0 : Math.max(prev - 1, 0)
+      setSelectedDeadlineId(filteredDeadlines[newIdx]?.id ?? null)
+      return newIdx
+    })
+  }, [filteredDeadlines])
+
+  // KBD-07: '?' — open shortcuts dialog.
+  const onOpenHelp = useCallback(() => {
+    setHelpOpen(true)
+  }, [])
+
+  // KBD-09: Cmd+K / Ctrl+K — open command palette.
+  const onOpenCommandK = useCallback(() => {
+    setCommandKOpen(true)
+  }, [])
+
+  // Mount keyboard shortcuts hook with all handlers
+  useKeyboardShortcuts({
+    onNewDeadline,
+    onEditSelected,
+    onDeleteSelected,
+    onJumpToday,
+    onMoveNext,
+    onMovePrev,
+    onOpenHelp,
+    onOpenCommandK,
+  })
+
+  // ── Slot content ─────────────────────────────────────────────────────────────
+
+  const calendarSlot = (
+    <section className="rounded-lg border bg-card p-4 shadow-sm h-full">
+      <CalendarView
+        ref={calendarRef}
+        onDateClick={handleDateClick}
+        deadlines={filteredDeadlines}
+        todayStr={todayStr}
+        onEventClick={(id) => selectDeadline(id === selectedDeadlineId ? -1 : id)}
+      />
+    </section>
+  )
+
+  const listSlot = (
+    <ListView
+      deadlines={filteredDeadlines}
+      isLoading={deadlinesQuery.isLoading}
+      isError={deadlinesQuery.isError}
+      filtersActive={!isDefault}
+      todayStr={todayStr}
+      onRowClick={(id) => selectDeadline(id === selectedDeadlineId ? -1 : id)}
+      onComplete={(id, completed) => mutations.update.mutate({
+        id,
+        patch: { completedAt: completed ? new Date().toISOString() : null },
+      })}
+      onDelete={(id, onError) => {
+        mutations.remove.mutate(id, { onError })
+        if (id === selectedDeadlineId) {
+          setSelectedDeadlineId(null)
+          setSelectedDeadlineIndex(null)
+        }
+      }}
+      selectedDeadlineId={selectedDeadlineId}
+      deleteTriggerSignal={deleteTriggerSignal}
+    />
+  )
+
+  const formSlot = (
+    <section className="rounded-lg border bg-card p-6 shadow-sm h-full overflow-auto">
+      <DeadlineForm
+        selectedDate={selectedDate}
+        deadline={selectedDeadline}
+        onCancel={() => {
+          setSelectedDeadlineId(null)
+          setSelectedDeadlineIndex(null)
+        }}
+        onSuccess={() => {
+          setSelectedDeadlineId(null)
+          setSelectedDeadlineIndex(null)
+        }}
+      />
+    </section>
+  )
 
   return (
     <div className="min-h-screen bg-background">
-      <main className={`${mainMaxWidth} mx-auto px-4 py-12`}>
+      <main className="mx-auto px-4 py-6 max-w-[7680px]">
         <div className="flex items-baseline justify-between mb-2">
           <h1 className="text-2xl font-semibold">Case Calendar</h1>
           <Link
@@ -77,69 +252,18 @@ export function App() {
           </Link>
         </div>
 
-        {/* FilterBar — sticky, above both views */}
-        <FilterBar />
+        <PaneLayout
+          filterBar={<FilterBar />}
+          view={view}
+          onViewChange={setView}
+          calendar={calendarSlot}
+          list={listSlot}
+          form={formSlot}
+        />
 
-        {/* View toggle */}
-        <div role="group" aria-label="View mode" className="inline-flex rounded-md border border-border overflow-hidden mt-2 mb-4">
-          <button
-            type="button"
-            aria-pressed={view === 'list'}
-            onClick={() => setView('list')}
-            className={view === 'list'
-              ? 'h-9 px-4 text-sm bg-secondary text-foreground font-semibold border-r border-border'
-              : 'h-9 px-4 text-sm bg-background text-muted-foreground font-normal hover:bg-muted/50 border-r border-border'}
-          >List</button>
-          <button
-            type="button"
-            aria-pressed={view === 'calendar'}
-            onClick={() => setView('calendar')}
-            className={view === 'calendar'
-              ? 'h-9 px-4 text-sm bg-secondary text-foreground font-semibold'
-              : 'h-9 px-4 text-sm bg-background text-muted-foreground font-normal hover:bg-muted/50'}
-          >Calendar</button>
-        </div>
-
-        {view === 'list' ? (
-          <>
-            <section className="rounded-lg border bg-card p-6 shadow-sm">
-              <DeadlineForm
-                selectedDate={selectedDate}
-                deadline={selectedDeadline}
-                onCancel={() => setSelectedDeadlineId(null)}
-                onSuccess={() => setSelectedDeadlineId(null)}
-              />
-            </section>
-
-            <ListView
-              deadlines={filteredDeadlines}
-              isLoading={deadlinesQuery.isLoading}
-              isError={deadlinesQuery.isError}
-              filtersActive={!isDefault}
-              todayStr={todayStr}
-              // Phase 4: click-to-edit, complete, delete
-              onRowClick={(id) => setSelectedDeadlineId(id === selectedDeadlineId ? null : id)}
-              onComplete={(id, completed) => mutations.update.mutate({
-                id,
-                patch: { completedAt: completed ? new Date().toISOString() : null },
-              })}
-              onDelete={(id, onError) => {
-                mutations.remove.mutate(id, { onError })
-                if (id === selectedDeadlineId) setSelectedDeadlineId(null)
-              }}
-              selectedDeadlineId={selectedDeadlineId}
-            />
-          </>
-        ) : (
-          <section className="rounded-lg border bg-card p-4 shadow-sm">
-            <CalendarView
-              onDateClick={handleDateClick}
-              deadlines={filteredDeadlines}
-              todayStr={todayStr}
-              onEventClick={(id) => setSelectedDeadlineId(id === selectedDeadlineId ? null : id)}
-            />
-          </section>
-        )}
+        {/* Dialogs mount unconditionally — Radix portals content only when open */}
+        <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
+        <CommandPaletteShell open={commandKOpen} onOpenChange={setCommandKOpen} />
       </main>
     </div>
   )

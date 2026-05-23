@@ -14,6 +14,8 @@ export interface BucketSectionProps {
   onComplete?: (id: number, completed: boolean) => void
   onDelete?: (id: number, onError: () => void) => void
   selectedDeadlineId?: number | null
+  /** Forwarded from ListView → DeadlineRow for keyboard-driven 2-step delete (KBD-03) */
+  deleteTriggerSignal?: { id: number; nonce: number } | null
 }
 
 export function BucketSection({
@@ -26,6 +28,7 @@ export function BucketSection({
   onComplete,
   onDelete,
   selectedDeadlineId,
+  deleteTriggerSignal,
 }: BucketSectionProps): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(true)
 
@@ -70,6 +73,7 @@ export function BucketSection({
               onComplete={onComplete}
               onDelete={onDelete}
               selectedDeadlineId={selectedDeadlineId}
+              deleteTriggerSignal={deleteTriggerSignal}
             />
           ))}
         </div>

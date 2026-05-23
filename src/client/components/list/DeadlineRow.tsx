@@ -22,6 +22,9 @@ export interface DeadlineRowProps {
   onDelete?: (id: number, onError: () => void) => void
   /** When set, this row shows the selected-row highlight */
   selectedDeadlineId?: number | null
+  /** Keyboard delete signal (KBD-03): when nonce changes and id matches, advance deleteStep idle→confirm.
+   *  The 2-step UX is preserved — user must press Delete a second time to confirm deletion. */
+  deleteTriggerSignal?: { id: number; nonce: number } | null
 }
 
 export function DeadlineRow({
@@ -33,6 +36,7 @@ export function DeadlineRow({
   onComplete,
   onDelete,
   selectedDeadlineId,
+  deleteTriggerSignal,
 }: DeadlineRowProps): React.JSX.Element {
   const parsedDate = parseLocalDate(deadline.date)
   const formattedDate = parsedDate ? format(parsedDate, 'MMM d, yyyy') : deadline.date
@@ -46,6 +50,26 @@ export function DeadlineRow({
   // 2-step delete confirm state
   const [deleteStep, setDeleteStep] = useState<DeleteStep>('idle')
   const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  /** Shared step-advance logic used by both mouse Delete button and keyboard Delete shortcut.
+   *  idle → confirm: prime the 2-step UX.
+   *  confirm → executing: trigger the actual deletion (mirrors mouse confirm-click path). */
+  function advanceDelete() {
+    if (deleteStep === 'idle') {
+      setDeleteStep('confirm')
+    } else if (deleteStep === 'confirm') {
+      setDeleteStep('executing')
+      onDelete?.(deadline.id, () => setDeleteStep('idle'))
+    }
+  }
+
+  // Keyboard delete signal: when nonce changes AND id matches, advance the delete step machine (KBD-03).
+  // Only advances one step per nonce change — user must fire Delete again to confirm.
+  useEffect(() => {
+    if (!deleteTriggerSignal || deleteTriggerSignal.id !== deadline.id) return
+    advanceDelete()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deleteTriggerSignal?.nonce])
 
   // 8-second timeout to reset from 'confirm' to 'idle' (Common Pitfall #10)
   useEffect(() => {
@@ -80,7 +104,7 @@ export function DeadlineRow({
     if (isOverdue || isToday) {
       selectedClass = 'outline outline-1 outline-primary/40 -outline-offset-1'
     } else {
-      selectedClass = 'bg-primary/5'
+      selectedClass = 'bg-primary/10'
     }
   }
 
@@ -166,7 +190,7 @@ export function DeadlineRow({
           type="button"
           onClick={(e) => {
             e.stopPropagation()
-            setDeleteStep('confirm')
+            advanceDelete()
           }}
           className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity h-7 px-2 text-sm text-muted-foreground hover:text-destructive rounded"
           aria-label={`Delete deadline ${deadline.caseLabel}`}
@@ -179,8 +203,7 @@ export function DeadlineRow({
           type="button"
           onClick={(e) => {
             e.stopPropagation()
-            setDeleteStep('executing')
-            onDelete?.(deadline.id, () => setDeleteStep('idle'))
+            advanceDelete()
           }}
           onBlur={() => setDeleteStep('idle')}
           className="shrink-0 h-7 px-2 text-sm text-destructive font-semibold hover:bg-destructive/10 rounded"
