@@ -4,7 +4,6 @@ import type { Bucket } from '@/shared/lib/buckets.js'
 import type { Deadline } from '@/shared/schemas/deadline.js'
 import { useTypeColors } from '@/client/hooks/useTypeColors.js'
 import { EmptyState } from '@/client/components/EmptyState.js'
-import { Button } from '@/client/components/ui/button.js'
 import { BucketSection } from './BucketSection.js'
 
 const BUCKET_LABELS: Record<Bucket, string> = {
@@ -97,11 +96,6 @@ export function ListView({
       >
         <div className="flex flex-col items-center py-12 px-4 gap-3">
           <p className="text-sm text-muted-foreground">No deadlines match your filters.</p>
-          {filtersActive && (
-            <Button variant="outline" size="sm" onClick={clearFilters}>
-              Clear filters
-            </Button>
-          )}
         </div>
       </div>
     )

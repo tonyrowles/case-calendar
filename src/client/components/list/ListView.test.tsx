@@ -165,8 +165,8 @@ describe('ListView — Wave 0 stubs (VIEW-03, VIEW-05)', () => {
     )
 
     expect(screen.getByText('No deadlines match your filters.')).toBeDefined()
-    // Clear filters button should be visible
-    expect(screen.getByRole('button', { name: /clear filters/i })).toBeDefined()
+    // WR-03: duplicate Clear button removed from empty state — FilterBar's "Clear" button
+    // is the single affordance (visible above the list at all times when filters are active).
   })
 
   it('L5: loading state renders skeleton rows', () => {
