@@ -140,7 +140,7 @@ export function CalendarView({ onDateClick }: CalendarViewProps): React.JSX.Elem
       />
       <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
         <PopoverAnchor virtualRef={virtualAnchorRef} />
-        <PopoverContent aria-labelledby="event-popover-title">
+        <PopoverContent aria-label="Event details">
           {selectedEvent && (
             <EventPopover
               event={selectedEvent}
