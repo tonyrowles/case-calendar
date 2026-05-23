@@ -7,6 +7,7 @@ import { cn } from "@/client/lib/utils"
 const ResizablePanelGroup = ({
   className,
   autoSaveId,
+  direction,   // WR-04: extract so it does not bleed to DOM as unknown attribute
   ...props
 }: React.HTMLAttributes<HTMLDivElement> & {
   direction?: "horizontal" | "vertical"
@@ -15,14 +16,16 @@ const ResizablePanelGroup = ({
   // v2 uses `id` prop for storage identification (via useDefaultLayout).
   // We pass autoSaveId as the `id` so consumers can continue using the same prop name
   // and the id is available on the DOM element for tests.
+  // WR-04: map `direction` → `orientation` (the v2 Group prop name).
   return (
     <ResizablePrimitive.Group
       className={cn(
         "flex h-full w-full",
-        props.direction === "vertical" ? "flex-col" : "",
+        direction === "vertical" ? "flex-col" : "",
         className
       )}
       id={autoSaveId}
+      orientation={direction ?? "horizontal"}
       {...(props as React.ComponentProps<typeof ResizablePrimitive.Group>)}
     />
   )
