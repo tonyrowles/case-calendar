@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { AlertCircle, X } from 'lucide-react'
 import { Input } from '@/client/components/ui/input.js'
 import {
@@ -9,6 +9,8 @@ import {
 import { ColorSwatchPicker } from './ColorSwatchPicker.js'
 import { useDeadlineTypeMutations } from '@/client/hooks/useDeadlineTypeMutations.js'
 import type { ApiError } from '@/client/lib/api.js'
+
+type DeleteStep = 'idle' | 'confirm'
 
 interface TypeListItemProps {
   id: number
@@ -29,6 +31,35 @@ export function TypeListItem({ id, name, color }: TypeListItemProps) {
 
   // --- Delete / general error state ---
   const [error, setError] = useState<string | null>(null)
+
+  // --- 2-step inline delete confirm (WR-03) ---
+  const [deleteStep, setDeleteStep] = useState<DeleteStep>('idle')
+  const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 5-second timeout to reset from 'confirm' to 'idle'
+  useEffect(() => {
+    if (deleteStep === 'confirm') {
+      deleteTimeoutRef.current = setTimeout(() => {
+        setDeleteStep('idle')
+      }, 5000)
+    }
+    return () => {
+      if (deleteTimeoutRef.current) {
+        clearTimeout(deleteTimeoutRef.current)
+        deleteTimeoutRef.current = null
+      }
+    }
+  }, [deleteStep])
+
+  // Escape key resets confirm state
+  useEffect(() => {
+    if (deleteStep === 'idle') return
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setDeleteStep('idle')
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [deleteStep])
 
   const startRename = useCallback(() => {
     setRenameValue(name)
@@ -144,16 +175,32 @@ export function TypeListItem({ id, name, color }: TypeListItemProps) {
           </span>
         )}
 
-        {/* Delete button — hover only */}
-        <button
-          type="button"
-          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity h-7 px-2 text-sm text-muted-foreground hover:text-destructive rounded"
-          onClick={handleDelete}
-          aria-label={`Delete type ${name}`}
-          disabled={mutations.remove.isPending}
-        >
-          Delete
-        </button>
+        {/* Delete button — 2-step inline confirm (WR-03) */}
+        {deleteStep === 'idle' && (
+          <button
+            type="button"
+            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity h-7 px-2 text-sm text-muted-foreground hover:text-destructive rounded"
+            onClick={() => setDeleteStep('confirm')}
+            aria-label={`Delete type ${name}`}
+            disabled={mutations.remove.isPending}
+          >
+            Delete
+          </button>
+        )}
+        {deleteStep === 'confirm' && (
+          <button
+            type="button"
+            className="shrink-0 h-7 px-2 text-sm text-destructive font-semibold hover:bg-destructive/10 rounded"
+            onClick={() => {
+              setDeleteStep('idle')
+              handleDelete()
+            }}
+            onBlur={() => setDeleteStep('idle')}
+            aria-label={`Confirm delete type ${name}`}
+          >
+            Are you sure?
+          </button>
+        )}
       </div>
 
       {/* Inline error banner (rename or delete errors) */}
