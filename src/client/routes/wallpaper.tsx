@@ -26,7 +26,7 @@ function WallpaperPill({ deadline, isOverdue, typesById, getColor }: {
   )
 }
 
-export function WallpaperView(): JSX.Element {
+export function WallpaperView(): React.JSX.Element {
   const deadlinesQuery = useQuery({
     queryKey: ['deadlines'],
     queryFn: getDeadlines,
