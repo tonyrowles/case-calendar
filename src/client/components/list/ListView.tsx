@@ -24,7 +24,7 @@ export interface ListViewProps {
   todayStr: string
   onRowClick?: (id: number) => void
   onComplete?: (id: number, completed: boolean) => void
-  onDelete?: (id: number) => void
+  onDelete?: (id: number, onError: () => void) => void
   selectedDeadlineId?: number | null
 }
 

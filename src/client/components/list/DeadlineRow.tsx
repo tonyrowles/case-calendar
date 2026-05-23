@@ -16,8 +16,10 @@ export interface DeadlineRowProps {
   onRowClick?: (id: number) => void
   /** Called when checkbox is toggled; completed=true → mark complete, false → unmark */
   onComplete?: (id: number, completed: boolean) => void
-  /** Called after 2nd confirm click on delete button */
-  onDelete?: (id: number) => void
+  /** Called after 2nd confirm click on delete button.
+   *  The second argument is a reset callback; callers must invoke it on failure
+   *  to return the row from 'executing' to 'idle' (WR-01). */
+  onDelete?: (id: number, onError: () => void) => void
   /** When set, this row shows the selected-row highlight */
   selectedDeadlineId?: number | null
 }
@@ -178,7 +180,7 @@ export function DeadlineRow({
           onClick={(e) => {
             e.stopPropagation()
             setDeleteStep('executing')
-            onDelete?.(deadline.id)
+            onDelete?.(deadline.id, () => setDeleteStep('idle'))
           }}
           onBlur={() => setDeleteStep('idle')}
           className="shrink-0 h-7 px-2 text-sm text-destructive font-semibold hover:bg-destructive/10 rounded"

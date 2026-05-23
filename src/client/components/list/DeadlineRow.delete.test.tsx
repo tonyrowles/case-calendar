@@ -28,7 +28,10 @@ function makeDeadline(overrides: Partial<Deadline> = {}): Deadline {
   }
 }
 
-function renderRow(onDelete?: (id: number) => void, onRowClick?: (id: number) => void) {
+function renderRow(
+  onDelete?: (id: number, onError: () => void) => void,
+  onRowClick?: (id: number) => void
+) {
   return render(
     <DeadlineRow
       deadline={makeDeadline()}
@@ -57,7 +60,7 @@ describe('CRUD-04: DeadlineRow — 2-step inline delete confirmation', () => {
     expect(screen.getByText('Are you sure?')).toBeDefined()
   })
 
-  it('second click changes label to "Confirm Delete" and fires onDelete callback', () => {
+  it('second click changes label to "Confirm Delete" and fires onDelete callback with id + reset fn', () => {
     const onDelete = vi.fn()
     renderRow(onDelete)
     // Step 1: click Delete
@@ -68,7 +71,37 @@ describe('CRUD-04: DeadlineRow — 2-step inline delete confirmation', () => {
     fireEvent.click(confirmBtn)
     expect(screen.getByText('Confirm Delete')).toBeDefined()
     expect(onDelete).toHaveBeenCalledTimes(1)
-    expect(onDelete).toHaveBeenCalledWith(5)
+    // First arg is deadline id; second arg is the reset callback (WR-01)
+    expect(onDelete.mock.calls[0][0]).toBe(5)
+    expect(typeof onDelete.mock.calls[0][1]).toBe('function')
+  })
+
+  it('WR-01: calling the onError reset fn returns the row to idle from executing state', async () => {
+    // Simulate a failed DELETE: onDelete receives the reset fn and calls it synchronously
+    let capturedReset: (() => void) | undefined
+    const onDelete = vi.fn((_, reset: () => void) => {
+      capturedReset = reset
+    })
+    renderRow(onDelete)
+    // Step 1: click Delete → confirm state
+    const deleteBtn = screen.getByRole('button', { name: /delete deadline/i })
+    fireEvent.click(deleteBtn)
+    // Step 2: click "Are you sure?" → executing state
+    const confirmBtn = screen.getByRole('button', { name: /confirm delete/i })
+    fireEvent.click(confirmBtn)
+    expect(screen.getByText('Confirm Delete')).toBeDefined()
+
+    // Simulate mutation error by invoking the captured reset callback
+    expect(capturedReset).toBeDefined()
+    act(() => {
+      capturedReset!()
+    })
+
+    // Row must return to idle: "Delete" button is visible again
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /delete deadline/i })).toBeDefined()
+      expect(screen.queryByText('Confirm Delete')).toBeNull()
+    })
   })
 
   it('clicking the Delete button does NOT trigger onRowClick (stopPropagation)', () => {

@@ -123,8 +123,8 @@ export function App() {
                 id,
                 patch: { completedAt: completed ? new Date().toISOString() : null },
               })}
-              onDelete={(id) => {
-                mutations.remove.mutate(id)
+              onDelete={(id, onError) => {
+                mutations.remove.mutate(id, { onError })
                 if (id === selectedDeadlineId) setSelectedDeadlineId(null)
               }}
               selectedDeadlineId={selectedDeadlineId}
