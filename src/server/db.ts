@@ -12,8 +12,12 @@ export { verifyPragmas, runStartupBackup, runStartupTriggers }
 // In test runs (Vitest sets VITEST=true) use a separate test DB so npm test
 // never touches the production database file.
 const IS_TEST = process.env.VITEST === 'true'
+// Per-worker test DB suffix so parallel test files (each in its own Vitest worker)
+// never race on the same SQLite file. VITEST_POOL_ID is exposed for both 'threads'
+// and 'forks' pools; fallback to 'main' for the orchestrator/setup process.
+const TEST_WORKER_ID = process.env.VITEST_POOL_ID || 'main'
 const DB_PATH = IS_TEST
-  ? path.join(process.cwd(), 'data', 'deadlines-test.db')
+  ? path.join(process.cwd(), 'data', `deadlines-test-${TEST_WORKER_ID}.db`)
   : path.join(process.cwd(), 'data', 'deadlines.db')
 export const BACKUP_DIR = IS_TEST
   ? path.join(process.cwd(), 'data', 'backups-test')
