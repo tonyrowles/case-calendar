@@ -1,5 +1,21 @@
-import React from 'react'
+import React, { useMemo, useRef, useState } from 'react'
+import FullCalendar from '@fullcalendar/react'
+import dayGridPlugin from '@fullcalendar/daygrid'
+import interactionPlugin from '@fullcalendar/interaction'
+import type { EventContentArg, DayCellContentArg, EventClickArg } from '@fullcalendar/core'
+import type { DateClickArg } from '@fullcalendar/interaction'
+// PopoverAnchor is not re-exported from the shadcn wrapper; import direct from Radix
+import { PopoverAnchor } from '@radix-ui/react-popover'
+import { useQuery } from '@tanstack/react-query'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
+import { getDeadlines, getDeadlineTypes } from '@/client/lib/api.js'
+import { toISODateString } from '@/shared/lib/date.js'
+import { useTypeColors } from '@/client/hooks/useTypeColors.js'
+import { EventPill } from './EventPill.js'
+import { EventPopover, type EventPopoverEvent } from './EventPopover.js'
+import { ErrorBanner } from '../ErrorBanner.js'
+import { Popover, PopoverContent } from '@/client/components/ui/popover.js'
+import './calendar.css'
 
 export interface CalendarViewProps {
   onDateClick?: (dateStr: string) => void  // empty-cell click; Plan 04 wires this to DeadlineForm
@@ -40,7 +56,110 @@ export function mapDeadlinesToEvents(
     }))
 }
 
-// Placeholder — Task 2 replaces this body with the FullCalendar implementation.
-export function CalendarView(_props: CalendarViewProps): React.JSX.Element {
-  return <div data-placeholder="CalendarView-T2-fills-this" />
+// dayCellContent: renders day number + "Today" label in the today cell corner
+function dayCellContent(arg: DayCellContentArg) {
+  return (
+    <div className="relative w-full h-full">
+      <span>{arg.dayNumberText}</span>
+      {arg.isToday && (
+        <span
+          className="absolute top-0 right-0 text-xs font-semibold text-amber-700 leading-none"
+          aria-label={`Today, ${arg.dayNumberText}`}
+        >
+          Today
+        </span>
+      )}
+    </div>
+  )
+}
+
+export function CalendarView({ onDateClick }: CalendarViewProps): React.JSX.Element {
+  const deadlinesQuery = useQuery({
+    queryKey: ['deadlines'],
+    queryFn: getDeadlines,
+  })
+
+  const typesQuery = useQuery({
+    queryKey: ['deadline-types'],
+    queryFn: getDeadlineTypes,
+  })
+
+  const { getColor } = useTypeColors()
+
+  // new Date() no-arg is allowed — SAFE-03 guard narrows to string-arg forms only
+  const todayStr = toISODateString(new Date())
+
+  const typesById = useMemo(
+    () => new Map((typesQuery.data ?? []).map(t => [t.id, t])),
+    [typesQuery.data]
+  )
+
+  const events = useMemo(
+    () => mapDeadlinesToEvents(deadlinesQuery.data ?? [], todayStr, typesById),
+    [deadlinesQuery.data, todayStr, typesById]
+  )
+
+  const [popoverOpen, setPopoverOpen] = useState(false)
+  const [selectedEvent, setSelectedEvent] = useState<EventPopoverEvent | null>(null)
+  const virtualAnchorRef = useRef<{ getBoundingClientRect(): DOMRect } | null>(null)
+
+  return (
+    <>
+      {deadlinesQuery.isLoading && (
+        <div
+          className="h-2 animate-pulse bg-muted rounded mb-4 mx-4"
+          aria-label="Loading deadlines"
+        />
+      )}
+      {deadlinesQuery.isError && (
+        <ErrorBanner
+          message="Couldn't load deadlines. Refresh the page."
+          onDismiss={() => {}}
+        />
+      )}
+      <FullCalendar
+        plugins={[dayGridPlugin, interactionPlugin]}
+        initialView="dayGridMonth"
+        firstDay={0}
+        dayMaxEvents={3}
+        moreLinkClick="popover"
+        editable={false}
+        height="auto"
+        fixedWeekCount={false}
+        headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+        events={events}
+        eventContent={(arg: EventContentArg) => <EventPill arg={arg} getColor={getColor} />}
+        dayCellClassNames={(arg: DayCellContentArg) => arg.isToday ? ['bg-amber-100'] : []}
+        dayCellContent={dayCellContent}
+        dateClick={(arg: DateClickArg) => {
+          // Guard against click-on-event bubbling (RESEARCH §Pitfall 2)
+          if (arg.jsEvent.target instanceof Element && arg.jsEvent.target.closest('.fc-event')) return
+          onDateClick?.(arg.dateStr)
+        }}
+        eventClick={(arg: EventClickArg) => {
+          virtualAnchorRef.current = arg.el
+          setSelectedEvent({
+            caseLabel: arg.event.extendedProps.caseLabel as string,
+            typeId: arg.event.extendedProps.typeId as number,
+            typeName: arg.event.extendedProps.typeName as string,
+            date: arg.event.startStr,
+            description: (arg.event.extendedProps.description as string) ?? '',
+          })
+          setPopoverOpen(true)
+        }}
+      />
+      <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+        <PopoverAnchor virtualRef={virtualAnchorRef} />
+        <PopoverContent aria-labelledby="event-popover-title">
+          {selectedEvent && (
+            <EventPopover
+              event={selectedEvent}
+              getColor={getColor}
+              onClose={() => setPopoverOpen(false)}
+            />
+          )}
+        </PopoverContent>
+      </Popover>
+    </>
+  )
 }
