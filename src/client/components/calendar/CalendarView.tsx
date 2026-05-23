@@ -104,7 +104,7 @@ export function CalendarView({ onDateClick }: CalendarViewProps): React.JSX.Elem
       {deadlinesQuery.isError && (
         <ErrorBanner
           message="Couldn't load deadlines. Refresh the page."
-          onDismiss={() => {}}
+          onDismiss={() => deadlinesQuery.refetch()}
         />
       )}
       <FullCalendar
