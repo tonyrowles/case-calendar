@@ -1,7 +1,14 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { DeadlineForm } from './components/DeadlineForm.js'
-import { DeadlinesTable } from './components/DeadlinesTable.js'
 import { CalendarView } from './components/calendar/CalendarView.js'
+import { ListView } from './components/list/ListView.js'
+import { FilterBar } from './components/filters/FilterBar.js'
+import { useFilters } from './hooks/useFilters.js'
+import { useDocumentTitle } from './hooks/useDocumentTitle.js'
+import { applyFilters } from '@/shared/lib/filters.js'
+import { getDeadlines } from './lib/api.js'
+import { toISODateString } from '@/shared/lib/date.js'
 
 export function App() {
   const [view, setView] = useState<'list' | 'calendar'>(() => {
@@ -23,6 +30,24 @@ export function App() {
     setView('list')
   }
 
+  const deadlinesQuery = useQuery({
+    queryKey: ['deadlines'],
+    queryFn: getDeadlines,
+  })
+
+  // new Date() no-arg is allowed — SAFE-03 guard narrows to string-arg forms only
+  const todayStr = toISODateString(new Date())
+
+  const { filters, clearAll, isDefault } = useFilters()
+
+  const filteredDeadlines = useMemo(
+    () => applyFilters(deadlinesQuery.data ?? [], filters, todayStr),
+    [deadlinesQuery.data, filters, todayStr]
+  )
+
+  // VIEW-08: count is NOT filter-aware — always reflects all deadlines due today
+  useDocumentTitle(deadlinesQuery.data, todayStr)
+
   const mainMaxWidth = view === 'list' ? 'max-w-2xl' : 'max-w-screen-xl'
 
   return (
@@ -30,8 +55,11 @@ export function App() {
       <main className={`${mainMaxWidth} mx-auto px-4 py-12`}>
         <h1 className="text-2xl font-semibold mb-2">Case Calendar</h1>
 
+        {/* FilterBar — sticky, above both views */}
+        <FilterBar />
+
         {/* View toggle */}
-        <div role="group" aria-label="View mode" className="inline-flex rounded-md border border-border overflow-hidden mt-2 mb-6">
+        <div role="group" aria-label="View mode" className="inline-flex rounded-md border border-border overflow-hidden mt-2 mb-4">
           <button
             type="button"
             aria-pressed={view === 'list'}
@@ -56,14 +84,22 @@ export function App() {
               <DeadlineForm selectedDate={selectedDate} />
             </section>
 
-            <section className="rounded-lg border bg-card mt-8">
-              <h2 className="text-xl font-semibold px-4 pt-4 pb-2">Saved Deadlines</h2>
-              <DeadlinesTable />
-            </section>
+            <ListView
+              deadlines={filteredDeadlines}
+              isLoading={deadlinesQuery.isLoading}
+              isError={deadlinesQuery.isError}
+              clearFilters={clearAll}
+              filtersActive={!isDefault}
+              todayStr={todayStr}
+            />
           </>
         ) : (
           <section className="rounded-lg border bg-card p-4 shadow-sm">
-            <CalendarView onDateClick={handleDateClick} />
+            <CalendarView
+              onDateClick={handleDateClick}
+              deadlines={filteredDeadlines}
+              todayStr={todayStr}
+            />
           </section>
         )}
       </main>

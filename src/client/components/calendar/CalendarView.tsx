@@ -19,6 +19,8 @@ import './calendar.css'
 
 export interface CalendarViewProps {
   onDateClick?: (dateStr: string) => void  // empty-cell click; Plan 04 wires this to DeadlineForm
+  deadlines?: Deadline[]   // OPTIONAL — when undefined, fall back to useQuery (Phase 2 behavior)
+  todayStr?: string         // OPTIONAL — when undefined, fall back to local derivation
 }
 
 // Pure helper exported for unit testing (SAFE-01/02 proof targets).
@@ -73,7 +75,7 @@ function dayCellContent(arg: DayCellContentArg) {
   )
 }
 
-export function CalendarView({ onDateClick }: CalendarViewProps): React.JSX.Element {
+export function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todayStrProp }: CalendarViewProps): React.JSX.Element {
   const deadlinesQuery = useQuery({
     queryKey: ['deadlines'],
     queryFn: getDeadlines,

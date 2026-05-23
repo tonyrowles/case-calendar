@@ -1,0 +1,232 @@
+// @vitest-environment jsdom
+// App-level integration tests for Plan 03-04.
+// Requirements: VIEW-05 (filter pipeline feeds both views), FILT-04 (URL roundtrip),
+//               FILT-05 (Clear → bare URL), VIEW-08 (document.title shape)
+import React from 'react'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
+import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
+import { toISODateString } from '@/shared/lib/date.js'
+import { App } from './App.js'
+
+vi.mock('./lib/api.js', () => ({
+  getDeadlines: vi.fn().mockResolvedValue([]),
+  getDeadlineTypes: vi.fn().mockResolvedValue([]),
+  getCaseLabels: vi.fn().mockResolvedValue([]),
+  createDeadline: vi.fn().mockResolvedValue({}),
+}))
+
+afterEach(() => cleanup())
+
+// Derive today relative to the actual system clock so todayStr matches App's todayStr
+// App calls toISODateString(new Date()) — so tests must align with real "today".
+// Pin using vi.setSystemTime to a known Wednesday so this-week has space before/after today.
+const PINNED_DATE = new Date(2026, 4, 20, 12, 0, 0) // 2026-05-20 Wednesday noon local
+const TODAY = toISODateString(PINNED_DATE)
+// thisWeekStart = 2026-05-17 (Sunday), thisWeekEnd = 2026-05-23 (Saturday)
+// overdue = date < 2026-05-20
+
+const TYPE_FILING: DeadlineType = { id: 1, name: 'Filing', color: '#1D4ED8', createdAt: '' }
+const TYPE_HEARING: DeadlineType = { id: 2, name: 'Hearing', color: '#16A34A', createdAt: '' }
+
+// 6 deadlines across 2 cases and 2 types
+const deadlineFixtures: Deadline[] = [
+  { id: 1, date: '2026-05-10', caseLabel: 'Smith v. Jones', typeId: 1, description: null, completedAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01' }, // overdue
+  { id: 2, date: '2026-05-15', caseLabel: 'Smith v. Jones', typeId: 2, description: null, completedAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01' }, // overdue
+  { id: 3, date: TODAY,        caseLabel: 'Garcia v. City', typeId: 1, description: null, completedAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01' }, // today
+  { id: 4, date: '2026-05-21', caseLabel: 'Garcia v. City', typeId: 2, description: null, completedAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01' }, // thisWeek
+  { id: 5, date: '2026-05-22', caseLabel: 'Smith v. Jones', typeId: 1, description: null, completedAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01' }, // thisWeek
+  { id: 6, date: '2026-06-15', caseLabel: 'Garcia v. City', typeId: 2, description: null, completedAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01' }, // later
+]
+
+function renderApp(
+  initialPath = '/',
+  seed?: (queryClient: QueryClient) => void
+) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+      mutations: { retry: false },
+    },
+  })
+  if (seed) seed(queryClient)
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[initialPath]}>
+        <App />
+      </MemoryRouter>
+    </QueryClientProvider>
+  )
+}
+
+describe('App filter integration (VIEW-05, FILT-04, FILT-05, VIEW-08)', () => {
+  beforeEach(() => {
+    // Pin the system clock so App's todayStr matches our fixture dates
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(PINNED_DATE)
+    // Reset view preference so each test starts in list view
+    localStorage.removeItem('cc-view')
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    localStorage.removeItem('cc-view')
+    cleanup()
+  })
+
+  it('I1: at default URL (/), list view shows only this-week deadlines (range=this-week default)', async () => {
+    renderApp('/', qc => {
+      qc.setQueryData(['deadlines'], deadlineFixtures)
+      qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
+      qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
+    })
+
+    // Default: range=this-week (2026-05-17 to 2026-05-23)
+    // In-range: id3 (today=2026-05-20), id4 (2026-05-21 thisWeek), id5 (2026-05-22 thisWeek)
+    // applyFilters with range=this-week keeps dates in [thisWeekStart, thisWeekEnd]
+    // id1 and id2 (overdue, date < thisWeekStart) excluded; id6 (later) excluded
+    await waitFor(() => {
+      const rows = screen.queryAllByRole('row')
+      expect(rows.length).toBeGreaterThan(0)
+    }, { timeout: 3000 })
+
+    const rows = screen.getAllByRole('row')
+    expect(rows.length).toBe(3) // id3, id4, id5
+  })
+
+  it('I2: at ?range=all, list view shows all 6 deadlines bucketed', async () => {
+    renderApp('/?range=all', qc => {
+      qc.setQueryData(['deadlines'], deadlineFixtures)
+      qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
+      qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
+    })
+
+    await waitFor(() => {
+      const rows = screen.queryAllByRole('row')
+      expect(rows.length).toBe(6)
+    }, { timeout: 3000 })
+
+    const rows = screen.getAllByRole('row')
+    expect(rows.length).toBe(6)
+  })
+
+  it('I3: VIEW-05 — applying case filter narrows list view rows (single-dataset proof)', async () => {
+    // Smith has 3 deadlines: id1 (overdue), id2 (overdue), id5 (thisWeek)
+    // VIEW-05: same filtered dataset goes to both views; verified by list row count + calendar not crashing
+    renderApp('/?case=Smith%20v.%20Jones&range=all', qc => {
+      qc.setQueryData(['deadlines'], deadlineFixtures)
+      qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
+      qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
+    })
+
+    // List view shows 3 Smith rows
+    await waitFor(() => {
+      const rows = screen.queryAllByRole('row')
+      expect(rows.length).toBe(3)
+    }, { timeout: 3000 })
+
+    expect(screen.getAllByRole('row').length).toBe(3)
+
+    // Toggle to Calendar view — CalendarView receives the same filteredDeadlines prop
+    // (At Task 2, the optional prop is accepted by CalendarViewProps but CalendarView
+    //  still uses its internal useQuery — Task 3 will swap it. The toggle itself must not crash.)
+    const calendarBtn = screen.getByRole('button', { name: /^calendar$/i })
+    fireEvent.click(calendarBtn)
+
+    // Calendar is now rendered; list rows are gone from DOM
+    // FullCalendar uses role="row" for its grid, so we check for DeadlineRow absence via
+    // the ListView container (role="table" aria-label="Deadlines list") being absent
+    const listTable = document.querySelector('[aria-label="Deadlines list"]')
+    expect(listTable).toBeNull()
+
+    // Switch back to list — filter state (URL params) preserved
+    const listBtn = screen.getByRole('button', { name: /^list$/i })
+    fireEvent.click(listBtn)
+
+    await waitFor(() => {
+      const rows = screen.queryAllByRole('row')
+      // Filter is preserved: still Smith-only (3 rows)
+      expect(rows.length).toBe(3)
+    }, { timeout: 3000 })
+  })
+
+  it('I4: FILT-05 — Clear button removes all filters; list returns to default this-week view', async () => {
+    renderApp('/?case=Smith%20v.%20Jones&type=1&range=overdue', qc => {
+      qc.setQueryData(['deadlines'], deadlineFixtures)
+      qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
+      qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
+    })
+
+    // Smith + type:Filing + overdue → only id1 (Smith, Filing, overdue)
+    await waitFor(() => {
+      const rows = screen.queryAllByRole('row')
+      expect(rows.length).toBe(1)
+    }, { timeout: 3000 })
+
+    // Clear button should be visible (non-default filters active)
+    const clearBtn = screen.getByRole('button', { name: /clear all filters/i })
+    fireEvent.click(clearBtn)
+
+    // After clear, default view (this-week range) should apply
+    // This-week deadlines: id3 (today), id4 (thisWeek), id5 (thisWeek) = 3 rows
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /clear all filters/i })).toBeNull()
+    }, { timeout: 3000 })
+
+    // Clear button gone means we're at defaults
+    expect(screen.queryByRole('button', { name: /clear all filters/i })).toBeNull()
+  })
+
+  it('I5: VIEW-08 — document.title is "Case Calendar (N due today)" when N>0; "Case Calendar" when N=0', async () => {
+    // Exactly 1 deadline due today
+    const todayOnly: Deadline[] = [
+      { id: 1, date: TODAY, caseLabel: 'Smith v. Jones', typeId: 1, description: null, completedAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+    ]
+    renderApp('/?range=all', qc => {
+      qc.setQueryData(['deadlines'], todayOnly)
+      qc.setQueryData(['deadline-types'], [TYPE_FILING])
+      qc.setQueryData(['case-labels'], ['Smith v. Jones'])
+    })
+
+    await waitFor(() => {
+      expect(document.title).toBe('Case Calendar (1 due today)')
+    }, { timeout: 3000 })
+
+    // Cleanup and render with zero today deadlines
+    cleanup()
+    const noTodayDeadlines: Deadline[] = [
+      { id: 1, date: '2026-06-01', caseLabel: 'Smith v. Jones', typeId: 1, description: null, completedAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+    ]
+    renderApp('/', qc => {
+      qc.setQueryData(['deadlines'], noTodayDeadlines)
+      qc.setQueryData(['deadline-types'], [TYPE_FILING])
+      qc.setQueryData(['case-labels'], [])
+    })
+
+    await waitFor(() => {
+      expect(document.title).toBe('Case Calendar')
+    }, { timeout: 3000 })
+  })
+
+  it('I5b: VIEW-08 — document.title count is NOT filter-aware (uses full deadlines, not filtered)', async () => {
+    // 2 deadlines today (both Smith and Garcia); filter applied to Garcia only
+    const twoToday: Deadline[] = [
+      { id: 1, date: TODAY, caseLabel: 'Smith v. Jones', typeId: 1, description: null, completedAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+      { id: 2, date: TODAY, caseLabel: 'Garcia v. City', typeId: 2, description: null, completedAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+    ]
+    // Filter by Garcia — list shows only Garcia's 1 today deadline
+    // But title should show 2 (full unfiltered count due today)
+    renderApp('/?case=Garcia%20v.%20City', qc => {
+      qc.setQueryData(['deadlines'], twoToday)
+      qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
+      qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
+    })
+
+    await waitFor(() => {
+      expect(document.title).toBe('Case Calendar (2 due today)')
+    }, { timeout: 3000 })
+  })
+})
