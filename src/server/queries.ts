@@ -34,3 +34,21 @@ export function createDeadline(input: {
   notifyMutation()
   return result
 }
+
+/**
+ * Return a sorted list of distinct non-empty case labels from the deadlines table.
+ * Used by GET /api/case-labels (Plan 03-02).
+ *
+ * SELECT DISTINCT case_label FROM deadlines WHERE case_label != '' ORDER BY case_label
+ * Empty strings are excluded to handle any rows that bypassed Zod's min(1) validation
+ * at the DB layer (RESEARCH Common Pitfall #9).
+ */
+export function listDistinctCaseLabels(): string[] {
+  return db
+    .selectDistinct({ label: deadlines.caseLabel })
+    .from(deadlines)
+    .orderBy(deadlines.caseLabel)
+    .all()
+    .map(r => r.label)
+    .filter(l => l.length > 0)
+}

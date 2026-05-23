@@ -26,3 +26,14 @@ export async function createDeadline(input: DeadlineCreate): Promise<Deadline> {
   }
   return res.json()
 }
+
+/**
+ * Fetch the sorted list of distinct case labels for the CaseCombobox filter.
+ * Source: GET /api/case-labels → string[] (Plan 03-02).
+ * Consumed by Plan 03-03's CaseCombobox via useQuery(['case-labels']).
+ */
+export async function getCaseLabels(): Promise<string[]> {
+  const res = await fetch('/api/case-labels')
+  if (!res.ok) throw new Error('Failed to fetch case labels')
+  return res.json()
+}

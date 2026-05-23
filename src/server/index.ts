@@ -9,6 +9,7 @@ import { cors } from 'hono/cors'
 import './db.js'                          // side-effect: opens the DB, verifies PRAGMAs, runs backup
 import { deadlinesRouter } from './routes/deadlines.js'
 import { deadlineTypesRouter } from './routes/deadline-types.js'
+import { caseLabelsRouter } from './routes/case-labels.js'
 import { logger } from './logger.js'
 import { userContextMiddleware, type AppVariables } from './middleware/user-context.js'
 import { createErrorHandler } from './middleware/error-shape.js'
@@ -30,6 +31,7 @@ app.onError(createErrorHandler())
 // Routes
 app.route('/api', deadlinesRouter)
 app.route('/api', deadlineTypesRouter)
+app.route('/api', caseLabelsRouter)
 
 // DATA-05: Seed default deadline types on startup (idempotent INSERT OR IGNORE)
 seedDeadlineTypes()
