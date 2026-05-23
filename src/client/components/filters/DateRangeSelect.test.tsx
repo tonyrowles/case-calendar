@@ -24,6 +24,18 @@ beforeAll(() => {
     if (!HTMLElement.prototype.scrollIntoView) {
       HTMLElement.prototype.scrollIntoView = function () {}
     }
+    // Polyfill Pointer Capture APIs — Radix UI Select uses these on pointerdown/up
+    // cleanup; jsdom does not implement them and the missing functions surface as
+    // unhandled async exceptions even though no assertion fails.
+    if (!HTMLElement.prototype.hasPointerCapture) {
+      HTMLElement.prototype.hasPointerCapture = function () { return false }
+    }
+    if (!HTMLElement.prototype.setPointerCapture) {
+      HTMLElement.prototype.setPointerCapture = function () {}
+    }
+    if (!HTMLElement.prototype.releasePointerCapture) {
+      HTMLElement.prototype.releasePointerCapture = function () {}
+    }
   }
 })
 
