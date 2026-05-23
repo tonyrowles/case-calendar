@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { DeadlineForm } from './components/DeadlineForm.js'
 
@@ -48,5 +48,19 @@ describe('DeadlineForm', () => {
   it('renders Add Deadline heading', () => {
     renderWithQuery(<DeadlineForm />)
     expect(screen.getByText('Add Deadline')).toBeDefined()
+  })
+
+  it('selectedDate prop pre-fills the date trigger and focuses case-label input (02-04-02)', async () => {
+    renderWithQuery(<DeadlineForm selectedDate="2026-07-04" />)
+    // The date trigger button should display the formatted date after the useEffect fires.
+    // We check by finding a button element whose text content contains the formatted date.
+    await waitFor(() => {
+      const dateTrigger = document.querySelector('#date-trigger')
+      expect(dateTrigger).not.toBeNull()
+      expect(dateTrigger!.textContent).toContain('July 4, 2026')
+    })
+    // The case-label input should have focus
+    const caseLabelInput = screen.getByPlaceholderText('e.g. Smith v. Jones')
+    expect(document.activeElement).toBe(caseLabelInput)
   })
 })

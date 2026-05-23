@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -29,10 +29,16 @@ import {
 import { Calendar } from '@/client/components/ui/calendar.js'
 import { ErrorBanner } from './ErrorBanner.js'
 
-export function DeadlineForm() {
+export interface DeadlineFormProps {
+  /** YYYY-MM-DD string; when changed, drives the date field via setValue + scrolls form + focuses case-label input */
+  selectedDate?: string
+}
+
+export function DeadlineForm({ selectedDate }: DeadlineFormProps = {}) {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [dateOpen, setDateOpen] = useState(false)
   const queryClient = useQueryClient()
+  const formRef = useRef<HTMLFormElement>(null)
 
   const typesQuery = useQuery({
     queryKey: ['deadline-types'],
@@ -44,6 +50,8 @@ export function DeadlineForm() {
     handleSubmit,
     control,
     reset,
+    setValue,
+    setFocus,
     formState: { errors },
   } = useForm<DeadlineCreate>({
     resolver: zodResolver(deadlineCreateSchema),
@@ -69,12 +77,26 @@ export function DeadlineForm() {
 
   const isPending = mutation.isPending
 
+  // When selectedDate changes (set by CalendarView dateClick), pre-fill the date
+  // field, scroll the form into view, and focus the case-label input so the
+  // user can immediately type the case name.
+  useEffect(() => {
+    if (!selectedDate) return
+    setValue('date', selectedDate, { shouldValidate: true, shouldDirty: true })
+    // scrollIntoView is a browser API; jsdom stubs it only in some environments
+    if (typeof formRef.current?.scrollIntoView === 'function') {
+      formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+    setFocus('caseLabel')
+  }, [selectedDate, setValue, setFocus])
+
   async function onSubmit(data: DeadlineCreate) {
     await mutation.mutateAsync(data)
   }
 
   return (
     <form
+      ref={formRef}
       onSubmit={handleSubmit(onSubmit)}
       autoComplete="off"
       className="space-y-4"
