@@ -37,3 +37,12 @@
   color: var(--muted-foreground);
   font-size: 0.75rem;
 }
+
+/* Phase 4 — completed event treatment (CRUD-05/06).
+   fc-event-main is FullCalendar v6's inner wrapper for custom eventContent.
+   Note: the line-through on caseLabel is applied via React className in EventPill.tsx;
+   this CSS rule provides the opacity overlay on the event container.
+   No hex literals added here — opacity only. */
+.fc-completed .fc-event-main {
+  opacity: 0.5;
+}

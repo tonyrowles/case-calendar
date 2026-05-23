@@ -22,11 +22,18 @@ export interface CalendarViewProps {
   onDateClick?: (dateStr: string) => void  // empty-cell click; Plan 04 wires this to DeadlineForm
   deadlines?: Deadline[]   // OPTIONAL — when undefined, fall back to useQuery (Phase 2 behavior)
   todayStr?: string         // OPTIONAL — when undefined, fall back to local derivation
+  /** Called when user clicks an event pill (lifts selectedDeadlineId to App) */
+  onEventClick?: (id: number) => void
 }
 
 // Pure helper exported for unit testing (SAFE-01/02 proof targets).
 // 3-arg signature locked in Plan 01 — typesById is required so extendedProps.typeName
 // is populated at map time, enabling EventPill's TYPE_ABBREV lookup to succeed.
+//
+// Phase 4 change: removed .filter(d => d.completedAt === null) — the parent applyFilters
+// in App.tsx now handles completedAt filtering via filters.showCompleted. This function
+// threads completedAt into extendedProps so eventClassNames can add 'fc-completed'
+// (RESEARCH Common Pitfall #9).
 export function mapDeadlinesToEvents(
   deadlines: Deadline[],
   todayStr: string,
@@ -41,22 +48,22 @@ export function mapDeadlinesToEvents(
     typeName: string                // typesById.get(typeId)?.name ?? 'Unknown'
     description: string
     isOverdue: boolean
+    completedAt: string | null      // Phase 4: for fc-completed class + EventPill ✓ icon
   }
 }> {
-  return deadlines
-    .filter(d => d.completedAt === null)
-    .map(d => ({
-      id: String(d.id),
-      start: d.date,   // YYYY-MM-DD string passed verbatim — NEVER new Date(d.date)
-      allDay: true as const,
-      extendedProps: {
-        caseLabel: d.caseLabel,
-        typeId: d.typeId,
-        typeName: typesById.get(d.typeId)?.name ?? 'Unknown',
-        description: d.description ?? '',
-        isOverdue: classifyDeadline(d, todayStr) === 'overdue',
-      },
-    }))
+  return deadlines.map(d => ({
+    id: String(d.id),
+    start: d.date,   // YYYY-MM-DD string passed verbatim — NEVER new Date(d.date)
+    allDay: true as const,
+    extendedProps: {
+      caseLabel: d.caseLabel,
+      typeId: d.typeId,
+      typeName: typesById.get(d.typeId)?.name ?? 'Unknown',
+      description: d.description ?? '',
+      isOverdue: classifyDeadline(d, todayStr) === 'overdue',
+      completedAt: d.completedAt,
+    },
+  }))
 }
 
 // dayCellContent: renders day number + "Today" label in the today cell corner
@@ -76,7 +83,7 @@ function dayCellContent(arg: DayCellContentArg) {
   )
 }
 
-export function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todayStrProp }: CalendarViewProps): React.JSX.Element {
+export function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todayStrProp, onEventClick }: CalendarViewProps): React.JSX.Element {
   // When deadlinesProp is provided (Phase 3+ App wires filtered dataset), use it.
   // When undefined (Phase 2 standalone or tests without prop), fall back to useQuery.
   // useQuery is always called (hooks must not be conditional) but its data is used only as fallback.
@@ -134,6 +141,12 @@ export function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: 
         headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
         events={events}
         eventContent={(arg: EventContentArg) => <EventPill arg={arg} getColor={getColor} />}
+        eventClassNames={(arg) => {
+          // Phase 4: add 'fc-completed' class when event has a completedAt timestamp
+          // This enables .fc-completed { opacity: 0.5 } in calendar.css (Common Pitfall #9)
+          const completedAt = (arg.event.extendedProps as { completedAt: string | null }).completedAt
+          return completedAt !== null ? ['fc-completed'] : []
+        }}
         dayCellClassNames={(arg: DayCellContentArg) => arg.isToday ? ['bg-amber-100'] : []}
         dayCellContent={dayCellContent}
         dateClick={(arg: DateClickArg) => {
@@ -151,6 +164,10 @@ export function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: 
             description: (arg.event.extendedProps.description as string) ?? '',
           })
           setPopoverOpen(true)
+          // Phase 4: lift selectedDeadlineId to App for edit-mode integration
+          // Opening popover AND loading into edit form are both triggered here.
+          // onEventClick is optional — when provided, App loads the deadline into DeadlineForm.
+          onEventClick?.(Number(arg.event.id))
         }}
       />
       <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>

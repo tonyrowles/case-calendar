@@ -5,6 +5,7 @@ import { CalendarView } from './components/calendar/CalendarView.js'
 import { ListView } from './components/list/ListView.js'
 import { FilterBar } from './components/filters/FilterBar.js'
 import { useFilters } from './hooks/useFilters.js'
+import { useDeadlineMutations } from './hooks/useDeadlineMutations.js'
 import { useDocumentTitle } from './hooks/useDocumentTitle.js'
 import { applyFilters } from '@/shared/lib/filters.js'
 import { getDeadlines } from './lib/api.js'
@@ -17,6 +18,9 @@ export function App() {
   })
 
   const [selectedDate, setSelectedDate] = useState<string>('')
+
+  // Phase 4: selectedDeadlineId — when set, DeadlineForm enters edit mode
+  const [selectedDeadlineId, setSelectedDeadlineId] = useState<number | null>(null)
 
   useEffect(() => {
     localStorage.setItem('cc-view', view)
@@ -40,9 +44,18 @@ export function App() {
 
   const { filters, clearAll, isDefault } = useFilters()
 
+  // Phase 4: centralized mutations for edit/delete operations
+  const mutations = useDeadlineMutations()
+
   const filteredDeadlines = useMemo(
     () => applyFilters(deadlinesQuery.data ?? [], filters, todayStr),
     [deadlinesQuery.data, filters, todayStr]
+  )
+
+  // Phase 4: find the selected deadline object for DeadlineForm edit mode
+  const selectedDeadline = useMemo(
+    () => deadlinesQuery.data?.find(d => d.id === selectedDeadlineId) ?? null,
+    [deadlinesQuery.data, selectedDeadlineId]
   )
 
   // VIEW-08: count is NOT filter-aware — always reflects all deadlines due today
@@ -81,7 +94,12 @@ export function App() {
         {view === 'list' ? (
           <>
             <section className="rounded-lg border bg-card p-6 shadow-sm">
-              <DeadlineForm selectedDate={selectedDate} />
+              <DeadlineForm
+                selectedDate={selectedDate}
+                deadline={selectedDeadline}
+                onCancel={() => setSelectedDeadlineId(null)}
+                onSuccess={() => setSelectedDeadlineId(null)}
+              />
             </section>
 
             <ListView
@@ -90,6 +108,17 @@ export function App() {
               isError={deadlinesQuery.isError}
               filtersActive={!isDefault}
               todayStr={todayStr}
+              // Phase 4: click-to-edit, complete, delete
+              onRowClick={(id) => setSelectedDeadlineId(id === selectedDeadlineId ? null : id)}
+              onComplete={(id, completed) => mutations.update.mutate({
+                id,
+                patch: { completedAt: completed ? new Date().toISOString() : null },
+              })}
+              onDelete={(id) => {
+                mutations.remove.mutate(id)
+                if (id === selectedDeadlineId) setSelectedDeadlineId(null)
+              }}
+              selectedDeadlineId={selectedDeadlineId}
             />
           </>
         ) : (
@@ -98,6 +127,7 @@ export function App() {
               onDateClick={handleDateClick}
               deadlines={filteredDeadlines}
               todayStr={todayStr}
+              onEventClick={(id) => setSelectedDeadlineId(id === selectedDeadlineId ? null : id)}
             />
           </section>
         )}

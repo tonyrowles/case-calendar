@@ -9,6 +9,8 @@ export interface Filters {
   case: string | null
   typeIds: number[]
   range: DateRange
+  /** Phase 4 (Plan 03): when true, completed deadlines are included in results */
+  showCompleted: boolean
 }
 
 /**
@@ -41,20 +43,22 @@ function lastDayOfMonth(todayStr: string): string {
  * Intersection semantics (AND): all active predicates must match.
  * - filters.case null/empty → no case constraint
  * - filters.typeIds empty → no type constraint
- * - filters.range 'all' → no date constraint (still excludes completedAt !== null)
+ * - filters.range 'all' → no date constraint
+ * - filters.showCompleted false (default) → excludes completedAt !== null
+ *   filters.showCompleted true → includes completed deadlines (CRUD-05/06, Phase 4)
  *
  * todayStr is INJECTED — this function never reads the system clock.
  * That makes it trivially testable across DST boundaries by parameterizing todayStr.
  *
- * Phase 3 always hides completed deadlines (completedAt !== null) — this is forward-compat
- * with Phase 4's CRUD-05/06 complete-toggle (RESEARCH Common Pitfall #4).
+ * Phase 4 Plan 03: showCompleted makes the completed filter conditional
+ * (RESEARCH Common Pitfall #4 forward-compat fulfilled here).
  */
 export function applyFilters<
   T extends { date: string; caseLabel: string; typeId: number; completedAt: string | null }
 >(deadlines: T[], filters: Filters, todayStr: string): T[] {
   return deadlines.filter(d => {
-    // Always hide completed deadlines in Phase 3
-    if (d.completedAt !== null) return false
+    // Hide completed deadlines unless showCompleted is true
+    if (!filters.showCompleted && d.completedAt !== null) return false
 
     // Case filter: exact string match (FILT-01 — single value, not substring)
     if (filters.case !== null && d.caseLabel !== filters.case) return false

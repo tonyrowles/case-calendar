@@ -3,6 +3,7 @@ import React from 'react'
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import { WallpaperView } from './wallpaper.js'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
 
@@ -18,7 +19,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function renderWithQuery(ui: React.ReactElement, { deadlines = [] as Deadline[], types = [] as DeadlineType[] } = {}) {
+function renderWithQuery(ui: React.ReactElement, { deadlines = [] as Deadline[], types = [] as DeadlineType[], initialPath = '/' } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
@@ -26,7 +27,11 @@ function renderWithQuery(ui: React.ReactElement, { deadlines = [] as Deadline[],
   queryClient.setQueryData(['deadlines'], deadlines)
   queryClient.setQueryData(['deadline-types'], types)
   return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[initialPath]}>
+        {ui}
+      </MemoryRouter>
+    </QueryClientProvider>
   )
 }
 

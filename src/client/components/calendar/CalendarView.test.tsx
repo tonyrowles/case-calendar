@@ -84,12 +84,17 @@ describe('mapDeadlinesToEvents (SAFE-01, SAFE-02) — pure function, 3-arg signa
     expect(result[0].start).toBe('2026-11-02')
   })
 
-  it('M6: filters out deadlines with completedAt !== null', () => {
+  it('M6: includes completed deadlines and threads completedAt into extendedProps (Phase 4: filter responsibility moved to applyFilters)', () => {
     const completed = makeDeadline({ id: 1, completedAt: '2026-05-01T00:00:00Z' })
     const active = makeDeadline({ id: 2, completedAt: null })
     const result = mapDeadlinesToEvents([completed, active], '2026-05-22', typesById)
-    expect(result).toHaveLength(1)
-    expect(result[0].id).toBe('2')
+    // Both deadlines are included — applyFilters is responsible for completed filtering
+    expect(result).toHaveLength(2)
+    // completedAt is threaded into extendedProps
+    const completedEvent = result.find(e => e.id === '1')!
+    const activeEvent = result.find(e => e.id === '2')!
+    expect(completedEvent.extendedProps.completedAt).toBe('2026-05-01T00:00:00Z')
+    expect(activeEvent.extendedProps.completedAt).toBeNull()
   })
 
   it('M7: computes isOverdue=true when date < todayStr AND completedAt === null', () => {

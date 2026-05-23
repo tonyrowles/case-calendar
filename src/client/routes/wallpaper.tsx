@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
+import { useSearchParams } from 'react-router-dom'
 
 import { getDeadlines } from '@/client/lib/api.js'
 import { parseLocalDate, toISODateString } from '@/shared/lib/date.js'
@@ -19,9 +20,13 @@ function WallpaperPill({ deadline, isOverdue, typesById, getColor }: {
   const borderColor = isOverdue ? '#B91C1C' : getColor(deadline.typeId)
   const labelClass = isOverdue ? 'text-2xl text-red-700' : 'text-2xl text-foreground'
   const nameColor = isOverdue ? '#B91C1C' : getColor(deadline.typeId)
+  const isCompleted = deadline.completedAt !== null
   return (
-    <div className="flex flex-col gap-1 w-full rounded-sm px-4 py-2 mb-2 border-l-4" style={{ borderColor }}>
-      <span className={labelClass}>{deadline.caseLabel}</span>
+    <div
+      className={`flex flex-col gap-1 w-full rounded-sm px-4 py-2 mb-2 border-l-4${isCompleted ? ' opacity-50' : ''}`}
+      style={{ borderColor }}
+    >
+      <span className={`${labelClass}${isCompleted ? ' line-through' : ''}`}>{deadline.caseLabel}</span>
       <span style={{ fontSize: '28px', fontWeight: '600', color: nameColor }}>{typeName}</span>
     </div>
   )
@@ -34,6 +39,12 @@ export function WallpaperView(): React.JSX.Element {
   })
 
   const { getColor, typesById, isLoading: typesLoading, isError: typesError } = useTypeColors()
+
+  // Phase 4: read showCompleted from URL params directly (NOT via useFilters — wallpaper is a
+  // separate route that should not inherit FilterBar state from the main app).
+  // T-04-03-01: strict '=== 1' comparison rejects any other value.
+  const [searchParams] = useSearchParams()
+  const showCompleted = searchParams.get('completed') === '1'
 
   // Capture a single Date at component mount so todayStr and days are always consistent.
   // new Date() no-arg is allowed — SAFE-03 guard narrows to string-arg forms only.
@@ -51,23 +62,23 @@ export function WallpaperView(): React.JSX.Element {
 
   const deadlines = deadlinesQuery.data ?? []
 
-  // Overdue: completed_at IS NULL AND date < today (strict less-than — today itself is NOT overdue)
-  // Refactored to consume groupByBucket from src/shared/lib/buckets (single source of truth).
-  // groupByBucket returns 'overdue' exactly when d.date < todayStr && d.completedAt === null.
+  // Overdue column: ALWAYS excludes completed deadlines, regardless of ?completed=1.
+  // A completed-overdue item is informational-only-not-actionable (Common Pitfall #3).
+  // groupByBucket already filters out completedAt !== null for overdue, so this is correct.
   const overdue = useMemo(
     () => groupByBucket(deadlines, todayStr).overdue,
     [deadlines, todayStr]
   )
 
-  // Upcoming: group by date string for each of the 14 day columns
+  // Day columns: include completed deadlines only when ?completed=1 is in URL
   const byDay = useMemo(
     () => new Map<string, Deadline[]>(
       days.map(dateStr => [
         dateStr,
-        deadlines.filter(d => d.completedAt === null && d.date === dateStr),
+        deadlines.filter(d => (showCompleted || d.completedAt === null) && d.date === dateStr),
       ])
     ),
-    [deadlines, days]
+    [deadlines, days, showCompleted]
   )
 
   // Last-updated timestamp in Los Angeles timezone
