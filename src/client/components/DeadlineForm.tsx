@@ -6,9 +6,10 @@ import { format } from 'date-fns'
 import { Loader2, CalendarIcon } from 'lucide-react'
 
 import { deadlineCreateSchema } from '@/shared/schemas/deadline.js'
-import type { DeadlineCreate } from '@/shared/schemas/deadline.js'
+import type { DeadlineCreate, Deadline } from '@/shared/schemas/deadline.js'
 import { parseLocalDate, toISODateString } from '@/shared/lib/date.js'
 import { createDeadline, getDeadlineTypes } from '@/client/lib/api.js'
+import { useDeadlineMutations } from '@/client/hooks/useDeadlineMutations.js'
 
 import { Button } from '@/client/components/ui/button.js'
 import { Input } from '@/client/components/ui/input.js'
@@ -32,13 +33,22 @@ import { ErrorBanner } from './ErrorBanner.js'
 export interface DeadlineFormProps {
   /** YYYY-MM-DD string; when changed, drives the date field via setValue + scrolls form + focuses case-label input */
   selectedDate?: string
+  /** When set, the form is in edit mode — fields prefilled from this deadline */
+  deadline?: Deadline | null
+  /** Called when the Cancel button is clicked in edit mode */
+  onCancel?: () => void
+  /** Called after a successful save (edit or create) — parent uses this to clear selectedDeadlineId */
+  onSuccess?: () => void
 }
 
-export function DeadlineForm({ selectedDate }: DeadlineFormProps = {}) {
+export function DeadlineForm({ selectedDate, deadline, onCancel, onSuccess }: DeadlineFormProps = {}) {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [dateOpen, setDateOpen] = useState(false)
   const queryClient = useQueryClient()
   const formRef = useRef<HTMLFormElement>(null)
+
+  // Edit mode flag — true when a deadline is being edited
+  const isEdit = deadline != null
 
   const typesQuery = useQuery({
     queryKey: ['deadline-types'],
@@ -63,35 +73,87 @@ export function DeadlineForm({ selectedDate }: DeadlineFormProps = {}) {
     },
   })
 
-  const mutation = useMutation({
+  // Centralized mutations (for edit mode PATCH)
+  const mutations = useDeadlineMutations()
+
+  // Create mutation (kept here for backward compat with Phase 1 tests)
+  const createMutation = useMutation({
     mutationFn: createDeadline,
     onSuccess: () => {
       setSaveError(null)
       reset()
       queryClient.invalidateQueries({ queryKey: ['deadlines'] })
+      queryClient.invalidateQueries({ queryKey: ['case-labels'] })
+      onSuccess?.()
     },
     onError: (err: Error) => {
       setSaveError(err.message)
     },
   })
 
-  const isPending = mutation.isPending
+  const isPending = createMutation.isPending || mutations.update.isPending
+
+  // Track the previous deadline id to distinguish initial mount (deadline=null) from
+  // a transition from edit→create (deadline was set, then cleared).
+  const prevDeadlineIdRef = useRef<number | undefined>(undefined)
+
+  // When the deadline prop changes (edit mode mount/unmount):
+  // - deadline truthy → prefill form with deadline values + focus caseLabel
+  // - deadline becomes null AFTER having been set → reset to empty defaults
+  // - initial mount with deadline=null → do nothing (avoids clobbering selectedDate effect)
+  useEffect(() => {
+    const prevId = prevDeadlineIdRef.current
+    const currentId = deadline?.id
+    prevDeadlineIdRef.current = currentId
+
+    if (deadline) {
+      // Entering edit mode
+      reset({
+        date: deadline.date,
+        caseLabel: deadline.caseLabel,
+        typeId: deadline.typeId,
+        description: deadline.description ?? '',
+      })
+      setFocus('caseLabel')
+    } else if (prevId !== undefined && currentId === undefined) {
+      // Transitioning from edit → create: clear the form
+      reset({
+        date: '',
+        caseLabel: '',
+        typeId: undefined as unknown as number,
+        description: '',
+      })
+    }
+    // Initial mount with deadline=null: no-op (selectedDate effect handles pre-fill)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deadline?.id])
 
   // When selectedDate changes (set by CalendarView dateClick), pre-fill the date
   // field, scroll the form into view, and focus the case-label input so the
   // user can immediately type the case name.
+  // Only active in create mode (when isEdit is false) — avoids clobbering edit prefill.
   useEffect(() => {
-    if (!selectedDate) return
+    if (!selectedDate || isEdit) return
     setValue('date', selectedDate, { shouldValidate: true, shouldDirty: true })
     // scrollIntoView is a browser API; jsdom stubs it only in some environments
     if (typeof formRef.current?.scrollIntoView === 'function') {
       formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
     setFocus('caseLabel')
-  }, [selectedDate, setValue, setFocus])
+  }, [selectedDate, setValue, setFocus, isEdit])
 
   async function onSubmit(data: DeadlineCreate) {
-    await mutation.mutateAsync(data)
+    if (isEdit && deadline) {
+      try {
+        await mutations.update.mutateAsync({ id: deadline.id, patch: data })
+        setSaveError(null)
+        onSuccess?.()
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : 'Update failed. Try again.')
+      }
+    } else {
+      await createMutation.mutateAsync(data)
+    }
   }
 
   return (
@@ -101,7 +163,14 @@ export function DeadlineForm({ selectedDate }: DeadlineFormProps = {}) {
       autoComplete="off"
       className="space-y-4"
     >
-      <h2 className="text-xl font-semibold">Add Deadline</h2>
+      {isEdit ? (
+        <h2 className="text-xl font-semibold">
+          Edit Deadline
+          <span className="text-xs font-semibold text-muted-foreground ml-2 align-middle">(editing)</span>
+        </h2>
+      ) : (
+        <h2 className="text-xl font-semibold">Add Deadline</h2>
+      )}
 
       {/* Date + Case row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -114,7 +183,7 @@ export function DeadlineForm({ selectedDate }: DeadlineFormProps = {}) {
             name="date"
             control={control}
             render={({ field }) => {
-              const selectedDate = field.value ? parseLocalDate(field.value) ?? undefined : undefined
+              const selectedDateVal = field.value ? parseLocalDate(field.value) ?? undefined : undefined
               return (
                 <Popover open={dateOpen} onOpenChange={setDateOpen}>
                   <PopoverTrigger asChild>
@@ -126,7 +195,7 @@ export function DeadlineForm({ selectedDate }: DeadlineFormProps = {}) {
                       aria-describedby={errors.date ? 'date-error' : undefined}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                      {selectedDate ? format(selectedDate, 'MMMM d, yyyy') : (
+                      {selectedDateVal ? format(selectedDateVal, 'MMMM d, yyyy') : (
                         <span className="text-muted-foreground">Pick a date</span>
                       )}
                     </Button>
@@ -134,7 +203,7 @@ export function DeadlineForm({ selectedDate }: DeadlineFormProps = {}) {
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
-                      selected={selectedDate}
+                      selected={selectedDateVal}
                       onSelect={(date) => {
                         field.onChange(date ? toISODateString(date) : '')
                         setDateOpen(false)
@@ -241,7 +310,7 @@ export function DeadlineForm({ selectedDate }: DeadlineFormProps = {}) {
         )}
       </div>
 
-      {/* Error banner — above Save button */}
+      {/* Error banner — above Save button (pessimistic UX: stays in edit mode on error) */}
       {saveError && (
         <ErrorBanner
           message={saveError}
@@ -249,23 +318,53 @@ export function DeadlineForm({ selectedDate }: DeadlineFormProps = {}) {
         />
       )}
 
-      {/* Save button */}
-      <Button
-        type="submit"
-        disabled={isPending || typesQuery.isError || typesQuery.isLoading}
-        aria-busy={isPending}
-        aria-label={isPending ? 'Saving deadline' : undefined}
-        className="w-full min-h-[44px]"
-      >
-        {isPending ? (
-          <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
-            Saving…
-          </>
-        ) : (
-          'Save Deadline'
-        )}
-      </Button>
+      {/* Button row — Cancel visible in edit mode */}
+      {isEdit ? (
+        <div className="flex gap-3">
+          <Button
+            type="submit"
+            disabled={isPending || typesQuery.isError || typesQuery.isLoading}
+            aria-busy={isPending}
+            aria-label={isPending ? 'Saving deadline' : undefined}
+            className="flex-1 min-h-[44px]"
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+                Saving…
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-[44px]"
+            onClick={onCancel}
+            disabled={isPending}
+          >
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="submit"
+          disabled={isPending || typesQuery.isError || typesQuery.isLoading}
+          aria-busy={isPending}
+          aria-label={isPending ? 'Saving deadline' : undefined}
+          className="w-full min-h-[44px]"
+        >
+          {isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+              Saving…
+            </>
+          ) : (
+            'Save Deadline'
+          )}
+        </Button>
+      )}
     </form>
   )
 }
