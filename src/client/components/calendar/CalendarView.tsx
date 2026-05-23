@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction'
@@ -17,6 +17,11 @@ import { EventPopover, type EventPopoverEvent } from './EventPopover.js'
 import { ErrorBanner } from '../ErrorBanner.js'
 import { Popover, PopoverContent } from '@/client/components/ui/popover.js'
 import './calendar.css'
+
+/** Imperative handle exposed via forwardRef — consumers call ref.current?.jumpToToday() */
+export interface CalendarViewHandle {
+  jumpToToday: () => void
+}
 
 export interface CalendarViewProps {
   onDateClick?: (dateStr: string) => void  // empty-cell click; Plan 04 wires this to DeadlineForm
@@ -83,7 +88,14 @@ function dayCellContent(arg: DayCellContentArg) {
   )
 }
 
-export function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todayStrProp, onEventClick }: CalendarViewProps): React.JSX.Element {
+export const CalendarView = forwardRef<CalendarViewHandle, CalendarViewProps>(
+function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todayStrProp, onEventClick }: CalendarViewProps, ref): React.JSX.Element {
+  // Imperative handle: expose jumpToToday() to parent (App.tsx) for the 't' keyboard shortcut
+  const calendarApiRef = useRef<FullCalendar>(null)
+  useImperativeHandle(ref, () => ({
+    jumpToToday: () => { calendarApiRef.current?.getApi().today() },
+  }), [])
+
   // When deadlinesProp is provided (Phase 3+ App wires filtered dataset), use it.
   // When undefined (Phase 2 standalone or tests without prop), fall back to useQuery.
   // useQuery is always called (hooks must not be conditional) but its data is used only as fallback.
@@ -130,6 +142,7 @@ export function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: 
         />
       )}
       <FullCalendar
+        ref={calendarApiRef}
         plugins={[dayGridPlugin, interactionPlugin]}
         initialView="dayGridMonth"
         firstDay={0}
@@ -183,4 +196,4 @@ export function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: 
       </Popover>
     </>
   )
-}
+})
