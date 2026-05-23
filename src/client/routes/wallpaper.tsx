@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 
-import { getDeadlines, getDeadlineTypes } from '@/client/lib/api.js'
+import { getDeadlines } from '@/client/lib/api.js'
 import { parseLocalDate, toISODateString } from '@/shared/lib/date.js'
 import { useTypeColors } from '@/client/hooks/useTypeColors.js'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
@@ -32,17 +32,7 @@ export function WallpaperView(): React.JSX.Element {
     queryFn: getDeadlines,
   })
 
-  const typesQuery = useQuery({
-    queryKey: ['deadline-types'],
-    queryFn: getDeadlineTypes,
-  })
-
-  const { getColor } = useTypeColors()
-
-  const typesById = useMemo(
-    () => new Map((typesQuery.data ?? []).map(t => [t.id, t])),
-    [typesQuery.data]
-  )
+  const { getColor, typesById, isLoading: typesLoading, isError: typesError } = useTypeColors()
 
   // Capture a single Date at component mount so todayStr and days are always consistent.
   // new Date() no-arg is allowed — SAFE-03 guard narrows to string-arg forms only.
@@ -87,10 +77,10 @@ export function WallpaperView(): React.JSX.Element {
     minute: '2-digit',
   })
 
-  if (deadlinesQuery.isLoading || typesQuery.isLoading) {
+  if (deadlinesQuery.isLoading || typesLoading) {
     return <div className="animate-pulse bg-muted rounded h-4 w-40" />
   }
-  if (deadlinesQuery.isError || typesQuery.isError) {
+  if (deadlinesQuery.isError || typesError) {
     return <div className="text-red-700 p-8">Failed to load deadlines. Refresh the page.</div>
   }
 

@@ -8,7 +8,7 @@ import type { DateClickArg } from '@fullcalendar/interaction'
 import { PopoverAnchor } from '@radix-ui/react-popover'
 import { useQuery } from '@tanstack/react-query'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
-import { getDeadlines, getDeadlineTypes } from '@/client/lib/api.js'
+import { getDeadlines } from '@/client/lib/api.js'
 import { toISODateString } from '@/shared/lib/date.js'
 import { useTypeColors } from '@/client/hooks/useTypeColors.js'
 import { EventPill } from './EventPill.js'
@@ -79,20 +79,10 @@ export function CalendarView({ onDateClick }: CalendarViewProps): React.JSX.Elem
     queryFn: getDeadlines,
   })
 
-  const typesQuery = useQuery({
-    queryKey: ['deadline-types'],
-    queryFn: getDeadlineTypes,
-  })
-
-  const { getColor } = useTypeColors()
+  const { getColor, typesById } = useTypeColors()
 
   // new Date() no-arg is allowed — SAFE-03 guard narrows to string-arg forms only
   const todayStr = toISODateString(new Date())
-
-  const typesById = useMemo(
-    () => new Map((typesQuery.data ?? []).map(t => [t.id, t])),
-    [typesQuery.data]
-  )
 
   const events = useMemo(
     () => mapDeadlinesToEvents(deadlinesQuery.data ?? [], todayStr, typesById),
