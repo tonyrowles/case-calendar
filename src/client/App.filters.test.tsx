@@ -229,4 +229,56 @@ describe('App filter integration (VIEW-05, FILT-04, FILT-05, VIEW-08)', () => {
       expect(document.title).toBe('Case Calendar (2 due today)')
     }, { timeout: 3000 })
   })
+
+  it('CR-01: when a filter removes the selected deadline from view, form returns to create mode', async () => {
+    // Start unfiltered (range=all) so all 6 deadlines are visible.
+    // id5 belongs to Smith v. Jones (typeId=1, date=2026-05-22).
+    // We'll click id5 to select it, then apply a Garcia filter that hides id5.
+    // After the filter, the form must show "Add Deadline" (create mode), NOT edit mode for id5.
+    renderApp('/?range=all', qc => {
+      qc.setQueryData(['deadlines'], deadlineFixtures)
+      qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
+      qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
+    })
+
+    // Wait for list to render
+    await waitFor(() => {
+      const rows = screen.queryAllByRole('row')
+      expect(rows.length).toBe(6)
+    }, { timeout: 3000 })
+
+    // Click the row for id5 (Smith v. Jones, 2026-05-22) to enter edit mode.
+    // DeadlineRow renders aria-label="Smith v. Jones, Filing, due May 22, 2026"
+    const smithRows = screen.getAllByRole('row').filter(r =>
+      r.textContent?.includes('Smith v. Jones') && r.textContent?.includes('May 22, 2026')
+    )
+    expect(smithRows.length).toBeGreaterThan(0)
+    fireEvent.click(smithRows[0])
+
+    // Form should now be in edit mode (shows "Save Changes" button)
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /save changes/i })).toBeTruthy()
+    }, { timeout: 3000 })
+
+    // Navigate to Garcia-only filter — id5 (Smith) is excluded
+    // Re-render with the garcia case filter applied
+    cleanup()
+    renderApp('/?case=Garcia%20v.%20City&range=all', qc => {
+      qc.setQueryData(['deadlines'], deadlineFixtures)
+      qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
+      qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
+    })
+
+    // Wait for filtered list (Garcia has id3, id4, id6 = 3 rows)
+    await waitFor(() => {
+      const rows = screen.queryAllByRole('row')
+      expect(rows.length).toBe(3)
+    }, { timeout: 3000 })
+
+    // Form must be in create mode — "Add Deadline" heading, no "Save Changes" button
+    await waitFor(() => {
+      expect(screen.queryByText('Add Deadline')).toBeTruthy()
+      expect(screen.queryByRole('button', { name: /save changes/i })).toBeNull()
+    }, { timeout: 3000 })
+  })
 })

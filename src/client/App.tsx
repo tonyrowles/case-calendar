@@ -78,10 +78,12 @@ export function App() {
     const newIdx = filteredDeadlines.findIndex(d => d.id === selectedDeadlineId)
     if (newIdx !== -1) {
       setSelectedDeadlineIndex(newIdx)
-    } else if (filteredDeadlines.length > 0) {
-      setSelectedDeadlineIndex(0)
     } else {
+      // Selected item is no longer in filteredDeadlines (filtered out or deleted).
+      // Clear BOTH pieces of state so DeadlineForm returns to create mode rather than
+      // silently loading filteredDeadlines[0] into edit mode (CR-01).
       setSelectedDeadlineIndex(null)
+      setSelectedDeadlineId(null)
     }
   }, [filteredDeadlines, selectedDeadlineId])
 
