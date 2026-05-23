@@ -155,7 +155,6 @@ export function CalendarView({ onDateClick }: CalendarViewProps): React.JSX.Elem
             <EventPopover
               event={selectedEvent}
               getColor={getColor}
-              onClose={() => setPopoverOpen(false)}
             />
           )}
         </PopoverContent>

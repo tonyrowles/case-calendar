@@ -14,7 +14,6 @@ export interface EventPopoverEvent {
 export interface EventPopoverProps {
   event: EventPopoverEvent
   getColor: (typeId: number) => string
-  onClose: () => void
 }
 
 export function EventPopover({ event, getColor }: EventPopoverProps): React.JSX.Element {
