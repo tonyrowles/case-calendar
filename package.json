@@ -18,6 +18,10 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@fullcalendar/core": "^6.1.20",
+    "@fullcalendar/daygrid": "^6.1.20",
+    "@fullcalendar/interaction": "^6.1.20",
+    "@fullcalendar/react": "^6.1.20",
     "@hono/node-server": "^2.0.3",
     "@hono/zod-validator": "^0.8.0",
     "@hookform/resolvers": "^5.2.2",
@@ -40,6 +44,7 @@
     "react-day-picker": "^10.0.1",
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.76.0",
+    "react-router-dom": "^7.15.1",
     "shadcn": "^4.8.0",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0",
