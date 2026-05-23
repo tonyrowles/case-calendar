@@ -132,27 +132,35 @@ export function WallpaperView(): React.JSX.Element {
         </div>
 
         {/* 14 day columns */}
-        {days.map(dateStr => (
-          <div key={dateStr} data-testid={`wallpaper-column-${dateStr}`} className="rounded-lg p-4">
-            <div className="pb-4 border-b border-border mb-4">
-              <div className="text-4xl font-semibold">
-                {format(parseLocalDate(dateStr) ?? new Date(), 'MMM d').toUpperCase()}
+        {days.map(dateStr => {
+          const parsedDate = parseLocalDate(dateStr)
+          if (!parsedDate) {
+            // Should never happen: dateStr always comes from toISODateString(validDate)
+            console.error(`wallpaper: unparseable dateStr: ${dateStr}`)
+            return null
+          }
+          return (
+            <div key={dateStr} data-testid={`wallpaper-column-${dateStr}`} className="rounded-lg p-4">
+              <div className="pb-4 border-b border-border mb-4">
+                <div className="text-4xl font-semibold">
+                  {format(parsedDate, 'MMM d').toUpperCase()}
+                </div>
+                <div style={{ fontSize: '28px' }} className="text-muted-foreground">
+                  {format(parsedDate, 'EEEE')}
+                </div>
               </div>
-              <div style={{ fontSize: '28px' }} className="text-muted-foreground">
-                {format(parseLocalDate(dateStr) ?? new Date(), 'EEEE')}
-              </div>
+              {(byDay.get(dateStr) ?? []).map(d => (
+                <WallpaperPill
+                  key={d.id}
+                  deadline={d}
+                  isOverdue={false}
+                  typesById={typesById}
+                  getColor={getColor}
+                />
+              ))}
             </div>
-            {(byDay.get(dateStr) ?? []).map(d => (
-              <WallpaperPill
-                key={d.id}
-                deadline={d}
-                isOverdue={false}
-                typesById={typesById}
-                getColor={getColor}
-              />
-            ))}
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
