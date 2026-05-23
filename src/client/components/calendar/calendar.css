@@ -1,0 +1,39 @@
+/* FullCalendar v6 injects its own CSS via JS at runtime. This file ONLY contains overrides
+   — do not import any @fullcalendar/*/main.css (no such file exists in v6). */
+
+/* Match Phase 1 heading typography for toolbar title */
+.fc-toolbar-title {
+  font-family: var(--font-sans);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* Day-of-week headers: uppercase, muted, small — matches Phase 1 table column header treatment */
+.fc-col-header-cell-cushion {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+  text-decoration: none;
+}
+
+/* Today cell: FullCalendar's default blue highlight must be overridden.
+   !important is intentional — FullCalendar's runtime CSS has higher specificity
+   than Tailwind classes applied via className (per 02-RESEARCH §Pitfall 1). */
+.fc-day-today {
+  background-color: #FEF3C7 !important;
+}
+
+/* Grid borders: use Phase 1 border token */
+.fc-scrollgrid,
+.fc-scrollgrid td,
+.fc-scrollgrid th {
+  border-color: var(--border) !important;
+}
+
+/* +N more link: muted, not distracting */
+.fc-daygrid-more-link {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
