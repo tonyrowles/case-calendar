@@ -10,7 +10,7 @@ import fs from 'node:fs'
 const ALLOWED_HEX = new Set([
   '#374151', // gray-700 — FALLBACK_COLOR in useTypeColors.ts
   '#B91C1C', // red-700  — OVERDUE_BORDER_COLOR in EventPill.tsx
-])
+].map(h => h.toUpperCase()))
 const ALLOW_TAG = /\/\/\s*allow-hex:/
 
 describe('TYPE-06: no hardcoded type-color hex in React source', () => {
