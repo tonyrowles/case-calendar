@@ -1,4 +1,5 @@
 import React from 'react'
+import { useDefaultLayout } from 'react-resizable-panels'
 import { useBreakpoint } from '@/client/hooks/useBreakpoint.js'
 import {
   ResizablePanelGroup,
@@ -60,6 +61,12 @@ export function PaneLayout(props: PaneLayoutProps): React.JSX.Element {
   const { filterBar, calendar, list, form, view, onViewChange } = props
   const tier = useBreakpoint()
 
+  // v2 layout persistence: useDefaultLayout reads the saved layout from localStorage on mount
+  // and provides onLayoutChanged to write on change. Both hooks are called unconditionally
+  // (rules of hooks) — they only take effect when the corresponding Group is rendered.
+  const threePane = useDefaultLayout({ id: 'cc-pane-sizes' })
+  const twoPane = useDefaultLayout({ id: 'cc-pane-sizes-two' })
+
   if (tier === 'three') {
     return (
       <div className="flex flex-col h-full">
@@ -67,6 +74,8 @@ export function PaneLayout(props: PaneLayoutProps): React.JSX.Element {
         <ResizablePanelGroup
           direction="horizontal"
           autoSaveId="cc-pane-sizes"
+          defaultLayout={threePane.defaultLayout}
+          onLayoutChanged={threePane.onLayoutChanged}
           className="h-full flex-1"
         >
           <ResizablePanel defaultSize={40} minSize={20} maxSize={70}>
@@ -98,6 +107,8 @@ export function PaneLayout(props: PaneLayoutProps): React.JSX.Element {
         <ResizablePanelGroup
           direction="horizontal"
           autoSaveId="cc-pane-sizes-two"
+          defaultLayout={twoPane.defaultLayout}
+          onLayoutChanged={twoPane.onLayoutChanged}
           className="h-full flex-1"
         >
           <ResizablePanel defaultSize={75} minSize={30} maxSize={85}>
