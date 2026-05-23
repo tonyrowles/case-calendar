@@ -210,4 +210,46 @@ describe('useKeyboardShortcuts', () => {
     // The plain shortcuts should still be blocked
     expect(handlers.onMovePrev).not.toHaveBeenCalled()
   })
+
+  describe("WR-01: TYPING_ROLES guard — Radix/cmdk interactive elements", () => {
+    const blockedRoles = ['option', 'listbox', 'combobox', 'menu', 'menuitem', 'menuitemcheckbox'] as const
+
+    for (const role of blockedRoles) {
+      it(`no handler fires when focused element has role="${role}"`, () => {
+        const handlers = makeHandlers()
+        renderHook(() => useKeyboardShortcuts(handlers))
+
+        const el = document.createElement('div')
+        el.setAttribute('role', role)
+        el.setAttribute('tabindex', '0')
+        document.body.appendChild(el)
+        el.focus()
+
+        fireEvent.keyDown(el, { key: 'n' })
+        fireEvent.keyDown(el, { key: 't' })
+        fireEvent.keyDown(el, { key: 'j' })
+        fireEvent.keyDown(el, { key: '?' })
+
+        expect(handlers.onNewDeadline).not.toHaveBeenCalled()
+        expect(handlers.onJumpToday).not.toHaveBeenCalled()
+        expect(handlers.onMoveNext).not.toHaveBeenCalled()
+        expect(handlers.onOpenHelp).not.toHaveBeenCalled()
+      })
+    }
+
+    it("Cmd+K still fires even when focused element has role=listbox (KBD-09 exception)", () => {
+      const handlers = makeHandlers()
+      renderHook(() => useKeyboardShortcuts(handlers))
+
+      const el = document.createElement('div')
+      el.setAttribute('role', 'listbox')
+      el.setAttribute('tabindex', '0')
+      document.body.appendChild(el)
+      el.focus()
+
+      fireEvent.keyDown(el, { key: 'k', metaKey: true })
+
+      expect(handlers.onOpenCommandK).toHaveBeenCalledOnce()
+    })
+  })
 })
