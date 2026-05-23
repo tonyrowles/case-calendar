@@ -1,7 +1,11 @@
-// DATA-06: TZ must be set before any date-dependent code loads.
-// cross-env TZ=America/Los_Angeles in npm scripts handles this for dev/test.
-// Set it here as a belt-and-suspenders guard for direct Node.js invocations.
-process.env.TZ = 'America/Los_Angeles'
+// DATA-06: TZ MUST be set in the environment before Node.js starts — not here.
+// In ESM, all static import declarations are hoisted and evaluated before any
+// module body code runs, so a process.env.TZ assignment at this line executes
+// AFTER db.ts side effects (db open, startup backup, triggers) have already run.
+// The npm scripts use `cross-env TZ=America/Los_Angeles` which sets the env var
+// before the Node.js process starts, which is the only correct approach.
+// For direct invocations (e.g. `node dist/server/index.js`), ensure TZ is set
+// in the shell or via a wrapper: `TZ=America/Los_Angeles node dist/server/index.js`
 
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
