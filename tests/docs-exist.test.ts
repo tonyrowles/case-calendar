@@ -23,6 +23,8 @@ const DOCS: DocSpec[] = [
       'docs/DEPLOYMENT.md#remote-access-via-tailscale',
       '## Desktop Wallpaper',
       'docs/DEPLOYMENT.md#desktop-wallpaper-phase-9',
+      '## Email Digest',
+      'docs/DEPLOYMENT.md#email-digest-phase-10',
     ],
   },
   {
@@ -56,6 +58,14 @@ const DOCS: DocSpec[] = [
       'nssm set $ServiceName ObjectName',
       'wallpaper:once',
       'Task Scheduler',
+      '## Email Digest (Phase 10)',
+      '### Configure SMTP',
+      '### Gmail Setup (App Password)',
+      'SMTP_HOST',
+      'EMAIL_DIGEST_ENABLED',
+      'email:once',
+      'App Password',
+      'smtp.gmail.com',
     ],
   },
   {
@@ -75,9 +85,23 @@ const DOCS: DocSpec[] = [
       'Session 0',
     ],
   },
+  {
+    path: '.env.example',
+    anchors: [
+      'SMTP_HOST',
+      'EMAIL_DIGEST_ENABLED',
+      'DO NOT commit .env.local',
+    ],
+  },
+  {
+    path: '.gitignore',
+    anchors: [
+      '.env',
+    ],
+  },
 ]
 
-describe('OPS-03 + REMOTE-01/02 + WALL-03/07: Phase 6 + Phase 8 + Phase 9 documentation artifacts exist with required anchors', () => {
+describe('OPS-03 + REMOTE-01/02 + WALL-03/07 + EMAIL-01/02: Phase 6 + Phase 8 + Phase 9 + Phase 10 documentation artifacts exist with required anchors', () => {
   for (const doc of DOCS) {
     describe(doc.path, () => {
       it('file exists', () => {
