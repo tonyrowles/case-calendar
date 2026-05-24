@@ -44,15 +44,17 @@ describe('HOOK-02: Worker stub files exist with correct exports', () => {
   })
 })
 
-describe('HOOK-03: scripts/wallpaper-set.ps1 placeholder exists', () => {
+describe('WALL-03: scripts/wallpaper-set.ps1 implements IDesktopWallpaper COM (Phase 9)', () => {
   it('scripts/wallpaper-set.ps1 exists at project root', () => {
     const filePath = path.join(PROJECT_ROOT, 'scripts/wallpaper-set.ps1')
     expect(fs.existsSync(filePath)).toBe(true)
   })
 
-  it('scripts/wallpaper-set.ps1 contains # TODO placeholder comment', () => {
+  it('scripts/wallpaper-set.ps1 references IDesktopWallpaper CLSID (Phase 9: no longer a placeholder)', () => {
     const filePath = path.join(PROJECT_ROOT, 'scripts/wallpaper-set.ps1')
     const contents = fs.readFileSync(filePath, 'utf-8')
-    expect(contents).toContain('# TODO')
+    expect(contents).toContain('C2CF3110-460E-4fc1-B9D0-8A1C0C9CC4BD')
+    expect(contents).toContain('SetWallpaper')
+    expect(contents).not.toContain('# TODO')
   })
 })

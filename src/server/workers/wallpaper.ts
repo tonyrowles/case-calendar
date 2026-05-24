@@ -13,6 +13,7 @@ import cron, { type ScheduledTask } from 'node-cron'
 import { chromium, type Browser, type BrowserContext } from 'playwright'
 import { logger } from '../logger.js'
 import { onMutation } from '../queries.js'
+import { spawnPowerShellApply } from './spawn-apply.js'
 
 // --- Constants ---
 
@@ -203,6 +204,12 @@ export function startWallpaperWorker(): void {
   launchBrowser().catch((err) =>
     logger.error({ err }, 'wallpaper: browser launch failed at startup')
   )
+
+  // Wire Plan 03's PowerShell apply implementation (Plan 03: WALL-03).
+  // Must run before the first cron tick or mutation can fire.
+  // Not gated by platform — generateAndApplyWallpaper guards process.platform === 'win32'
+  // before calling applyWallpaperImpl, so spawnPowerShellApply is set unconditionally.
+  setApplyWallpaper(spawnPowerShellApply)
 
   // Register 30-minute cron task (WALL-04)
   cronTask = cron.schedule(
