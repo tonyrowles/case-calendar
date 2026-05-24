@@ -243,17 +243,26 @@ export function App() {
     />
   )
 
+  // Memoize so the object reference is stable as long as duplicateSource hasn't changed.
+  // Without this, every App re-render (TanStack Query refetch, filter change, etc.) produces
+  // a new inline object, causing DeadlineForm's useEffect([prefillValues]) to re-fire and
+  // call setFocus('caseLabel'), stealing focus from whatever the user is typing (CR-02).
+  const prefillValues = useMemo(
+    () => duplicateSource ? {
+      date: duplicateSource.date,
+      caseLabel: duplicateSource.caseLabel,
+      typeId: duplicateSource.typeId,
+      description: duplicateSource.description ?? '',
+    } : undefined,
+    [duplicateSource]
+  )
+
   const formSlot = (
     <section className="rounded-lg border bg-card p-6 shadow-sm h-full overflow-auto">
       <DeadlineForm
         selectedDate={selectedDate}
         deadline={selectedDeadline}
-        prefillValues={duplicateSource ? {
-          date: duplicateSource.date,
-          caseLabel: duplicateSource.caseLabel,
-          typeId: duplicateSource.typeId,
-          description: duplicateSource.description ?? '',
-        } : undefined}
+        prefillValues={prefillValues}
         onCancel={() => {
           setSelectedDeadlineId(null)
           setSelectedDeadlineIndex(null)
