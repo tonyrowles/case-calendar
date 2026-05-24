@@ -21,6 +21,8 @@ const DOCS: DocSpec[] = [
       '| SAFE-10 ',
       '## Remote Access',
       'docs/DEPLOYMENT.md#remote-access-via-tailscale',
+      '## Desktop Wallpaper',
+      'docs/DEPLOYMENT.md#desktop-wallpaper-phase-9',
     ],
   },
   {
@@ -47,6 +49,13 @@ const DOCS: DocSpec[] = [
       'TAILSCALE_HOSTNAME',
       'Tailscale-User-Login',
       '/api/identity',
+      '## Desktop Wallpaper (Phase 9)',
+      '### NSSM Session 0 Fix',
+      '### DPI Scaling',
+      'npx playwright install chromium',
+      'nssm set $ServiceName ObjectName',
+      'wallpaper:once',
+      'Task Scheduler',
     ],
   },
   {
@@ -61,11 +70,14 @@ const DOCS: DocSpec[] = [
       'nssm remove',
       'Pacific Standard Time',
       'dist\\server\\src\\server\\index.js',
+      '$LogonUser',
+      'ObjectName',
+      'Session 0',
     ],
   },
 ]
 
-describe('OPS-03 + REMOTE-01/02: Phase 6 + Phase 8 documentation artifacts exist with required anchors', () => {
+describe('OPS-03 + REMOTE-01/02 + WALL-03/07: Phase 6 + Phase 8 + Phase 9 documentation artifacts exist with required anchors', () => {
   for (const doc of DOCS) {
     describe(doc.path, () => {
       it('file exists', () => {

@@ -403,6 +403,13 @@ npm run wallpaper:once
 
 **Fix:** Re-run `nssm-install.ps1` with `-LogonUser '.\<username>'` (see NSSM Session 0 Fix above), or set up the Task Scheduler alternative.
 
+To set ObjectName without re-running the full install (existing service only):
+
+```powershell
+nssm set $ServiceName ObjectName .\<username>
+nssm restart CaseCalendar
+```
+
 #### Worker log shows `wallpaper: browser launch failed at startup`
 
 **Cause:** Playwright Chromium binary not installed.
