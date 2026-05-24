@@ -20,7 +20,7 @@ import { caseLabelsRouter } from './routes/case-labels.js'
 import { logger } from './logger.js'
 import { userContextMiddleware, type AppVariables } from './middleware/user-context.js'
 import { createErrorHandler } from './middleware/error-shape.js'
-import { CORS_ORIGINS } from './cors.js'
+import { CORS_ORIGINS, TAILSCALE_CORS_HOSTNAME } from './cors.js'
 // seedDeadlineTypes is created by Plan 01-03 — both plans are wave 2 siblings
 import { seedDeadlineTypes } from './seed.js'
 
@@ -95,6 +95,12 @@ if (process.env.VITEST !== 'true') {
     },
     (info) => {
       logger.info(`Server listening on http://${info.address}:${info.port}`)
+      if (TAILSCALE_CORS_HOSTNAME) {
+        logger.info(
+          { hostname: TAILSCALE_CORS_HOSTNAME },
+          'cors: tailscale origins allowed (http + https)'
+        )
+      }
     }
   )
 }
