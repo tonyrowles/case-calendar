@@ -105,7 +105,7 @@ Verify the update with the same checklist in the Verify section above.
 
 ### Service won't start / restart loop
 
-The most common cause is `dist\server\index.js` missing or corrupted. Tail the error log first:
+The most common cause is `dist\server\src\server\index.js` missing or corrupted. Tail the error log first:
 
 ```powershell
 Get-Content C:\apps\case-calendar\logs\case-calendar.err -Tail 30
