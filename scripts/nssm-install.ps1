@@ -14,7 +14,9 @@
 
 param(
   [string]$ServiceName = "CaseCalendar",
-  [string]$InstallDir = (Resolve-Path "$PSScriptRoot\..").Path
+  [string]$InstallDir = (Resolve-Path "$PSScriptRoot\..").Path,
+  [string]$LogonUser = "",          # e.g. ".\yourusername" — required for wallpaper apply (Phase 9 Session 0 fix)
+  [string]$LogonPassword = ""       # stored encrypted by NSSM via Windows DPAPI; omit to be prompted at install
 )
 
 Set-StrictMode -Version Latest
@@ -89,6 +91,28 @@ nssm set $ServiceName AppExit Default Restart
 nssm set $ServiceName Start SERVICE_AUTO_START
 
 # ---------------------------------------------------------------------------
+# Phase 9 Session 0 fix: optionally run the service as a specific user account.
+# When ObjectName is set to a real user, the service runs in that user's
+# interactive session (Session 1+), where IDesktopWallpaper::SetWallpaper
+# can reach the visible desktop. LocalSystem (default) runs in Session 0
+# and silently no-ops wallpaper apply. See docs/DEPLOYMENT.md#nssm-session-0-fix
+# ---------------------------------------------------------------------------
+if ($LogonUser -ne "") {
+  if ($LogonPassword -eq "") {
+    $secure = Read-Host "Enter password for $LogonUser (stored encrypted via Windows DPAPI)" -AsSecureString
+    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    $LogonPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) | Out-Null
+  }
+  nssm set $ServiceName ObjectName $LogonUser $LogonPassword
+  Write-Host "Service account set to: $LogonUser (Session 1+ — wallpaper apply enabled)"
+} else {
+  Write-Warning "No -LogonUser provided. Service will run as LocalSystem (Session 0)."
+  Write-Warning "Phase 9 wallpaper apply will silently fail until you re-run with -LogonUser '.\<username>'."
+  Write-Warning "See docs/DEPLOYMENT.md#nssm-session-0-fix for the fix or the Task Scheduler alternative."
+}
+
+# ---------------------------------------------------------------------------
 # Instructions — do NOT auto-start; let the operator verify first
 # ---------------------------------------------------------------------------
 Write-Host ""
@@ -98,3 +122,7 @@ Write-Host "Verify with:  nssm status $ServiceName ; netstat -ano | findstr 3747
 Write-Host "Tail logs:    Get-Content -Wait $logsDir\case-calendar.log"
 Write-Host ""
 Write-Host "After verification, the service will auto-start on every Windows boot (Start=SERVICE_AUTO_START)."
+Write-Host ""
+Write-Host "WALLPAPER (Phase 9): For desktop wallpaper apply to work, re-run with:"
+Write-Host "  pwsh -ExecutionPolicy Bypass -File .\scripts\nssm-install.ps1 -LogonUser '.\<username>'"
+Write-Host "(You will be prompted for the password.) See docs/DEPLOYMENT.md#desktop-wallpaper-phase-9"
