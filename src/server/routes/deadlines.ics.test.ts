@@ -139,19 +139,21 @@ describe('GET /api/deadlines.ics', () => {
   })
 
   it('Test 10 (?type cap): at most 50 typeIds used from a long CSV', async () => {
-    // Seed 51 types and 51 deadlines
+    // Seed 51 types and 51 deadlines with VALID dates (day <= 28 to be safe for all months)
     for (let i = 2; i <= 51; i++) {
       seedType(i, `Type${i}`, '#000000') // allow-hex: test fixture
     }
     for (let i = 1; i <= 51; i++) {
-      seedDeadline(`2026-06-${String(i).padStart(2, '0')}`, `Case ${i}`, i)
+      // Use a fixed valid date for all — only typeId differs so ics never sees invalid day values
+      seedDeadline('2026-06-15', `Case ${i}`, i)
     }
-    // Build CSV with 51 typeIds
+    // Build CSV with 51 typeIds (one more than the 50-cap)
     const csvIds = Array.from({ length: 51 }, (_, k) => k + 1).join(',')
     const res = await app.request(`/api/deadlines.ics?type=${csvIds}`)
+    expect(res.status).toBe(200) // must be 200, not 500 from ics validation error
     const body = await res.text()
     const count = (body.match(/BEGIN:VEVENT/g) ?? []).length
-    expect(count).toBeLessThanOrEqual(50)
+    expect(count).toBe(50) // exactly 50, not just <= 50
   })
 
   it('Test 11 (ETag round-trip): first GET returns ETag; second GET with If-None-Match returns 304', async () => {
