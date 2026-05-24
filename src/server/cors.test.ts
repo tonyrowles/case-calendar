@@ -61,10 +61,13 @@ describe('SAFE-08: CORS middleware', () => {
 describe('SAFE-08 (production): CORS allowlist locked to loopback-served origin', () => {
   let prodOrigins: readonly string[]
   let prevNodeEnv: string | undefined
+  let prevHostname: string | undefined
 
   beforeAll(async () => {
     prevNodeEnv = process.env.NODE_ENV
+    prevHostname = process.env.TAILSCALE_HOSTNAME
     process.env.NODE_ENV = 'production'
+    delete process.env.TAILSCALE_HOSTNAME  // isolate from Phase 8 env
 
     // Reset the module cache so cors.ts is re-evaluated with NODE_ENV=production.
     vi.resetModules()
@@ -75,6 +78,8 @@ describe('SAFE-08 (production): CORS allowlist locked to loopback-served origin'
   afterAll(async () => {
     if (prevNodeEnv === undefined) delete process.env.NODE_ENV
     else process.env.NODE_ENV = prevNodeEnv
+    if (prevHostname === undefined) delete process.env.TAILSCALE_HOSTNAME
+    else process.env.TAILSCALE_HOSTNAME = prevHostname
     // Restore module cache to dev state for subsequent test files.
     vi.resetModules()
   })
