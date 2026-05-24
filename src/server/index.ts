@@ -8,8 +8,11 @@
 // in the shell or via a wrapper: `TZ=America/Los_Angeles node dist/server/index.js`
 
 import { serve } from '@hono/node-server'
+import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import fs from 'node:fs'
+import path from 'node:path'
 import './db.js'                          // side-effect: opens the DB, verifies PRAGMAs, runs backup
 import { deadlinesRouter } from './routes/deadlines.js'
 import { deadlineTypesRouter } from './routes/deadline-types.js'
@@ -36,6 +39,47 @@ app.onError(createErrorHandler())
 app.route('/api', deadlinesRouter)
 app.route('/api', deadlineTypesRouter)
 app.route('/api', caseLabelsRouter)
+
+// OPS-02: Production SPA serving — mount AFTER /api routes so API precedence is intact.
+const isProduction = process.env.NODE_ENV === 'production'
+let INDEX_HTML: string | null = null
+if (isProduction) {
+  const clientDir = path.join(process.cwd(), 'dist/client')
+  const indexPath = path.join(clientDir, 'index.html')
+  try {
+    INDEX_HTML = fs.readFileSync(indexPath, 'utf-8')
+  } catch (err) {
+    logger.error({ err, indexPath }, 'OPS-02: dist/client/index.html missing — run `npm run build` before `npm run start`')
+    throw err
+  }
+  // Hashed asset bundles — aggressive cache (immutable).
+  // Cache-Control is set BEFORE serveStatic so the header is included in the response
+  // (onFound runs after c.body() which finalizes the Response object).
+  app.use('/assets/*', async (c, next) => {
+    c.header('Cache-Control', 'public, max-age=31536000, immutable')
+    return next()
+  })
+  app.use('/assets/*', serveStatic({ root: './dist/client' }))
+  // Other static files (favicon, etc.) — moderate cache; index.html gets no-cache.
+  app.use('/*', async (c, next) => {
+    const p = c.req.path
+    if (p.endsWith('.html') || p === '/') {
+      c.header('Cache-Control', 'no-cache')
+    } else {
+      c.header('Cache-Control', 'public, max-age=86400')
+    }
+    return next()
+  })
+  app.use('/*', serveStatic({ root: './dist/client' }))
+  // SPA fallback — cached index.html for any non-API, non-asset path
+  app.notFound((c) => {
+    const p = c.req.path
+    if (p.startsWith('/api/') || p.startsWith('/assets/')) {
+      return c.json({ error: { code: 'not_found', message: 'Not found' } }, 404)
+    }
+    return c.html(INDEX_HTML!, 200, { 'Cache-Control': 'no-cache' })
+  })
+}
 
 // DATA-05: Seed default deadline types on startup (idempotent INSERT OR IGNORE)
 seedDeadlineTypes()
