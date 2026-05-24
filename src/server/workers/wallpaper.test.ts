@@ -133,6 +133,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
 
 // --- WALL-01: Playwright screenshot integration ---
@@ -416,14 +417,16 @@ describe('WALL-05/WALL-03: concurrency + crash safety', () => {
       close: vi.fn().mockResolvedValue(undefined),
     })
 
-    // First call — keeps screenshot pending
+    // First call — keeps screenshot pending indefinitely
     const firstCall = wp.generateAndApplyWallpaper()
 
-    // Allow the promise chain to start (micro-task flush)
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
+    // Allow the full async chain to reach the screenshot call (many micro-task flushes)
+    // launchBrowser -> context -> page -> goto -> waitForTimeout -> screenshot (pending)
+    for (let i = 0; i < 20; i++) {
+      await Promise.resolve()
+    }
 
+    // At this point isGenerating=true and screenshotMock is being awaited
     // Second call — should see isGenerating=true and return immediately
     await wp.generateAndApplyWallpaper()
 
@@ -438,16 +441,7 @@ describe('WALL-05/WALL-03: concurrency + crash safety', () => {
   it('T15: when applyWallpaperImpl rejects, error is logged at warn and isGenerating resets to false', async () => {
     vi.stubGlobal('process', { ...process, platform: 'win32' })
 
-    const applyFn = vi.fn().mockRejectedValue(new Error('PS1 failed'))
-    wp.setApplyWallpaper(applyFn)
-
-    // Should not throw
-    await expect(wp.generateAndApplyWallpaper()).resolves.toBeUndefined()
-
-    // Error should be logged at warn
-    expect(logger.warn).toHaveBeenCalled()
-
-    // isGenerating should be reset — second call can proceed
+    // Track screenshot calls from the beforeEach mock context
     const screenshotMock = vi.fn().mockResolvedValue(undefined)
     ;(chromium.launch as ReturnType<typeof vi.fn>).mockResolvedValue({
       newContext: vi.fn().mockResolvedValue({
@@ -462,9 +456,20 @@ describe('WALL-05/WALL-03: concurrency + crash safety', () => {
       close: vi.fn().mockResolvedValue(undefined),
     })
 
-    await wp.generateAndApplyWallpaper()
-    // Second call should succeed (isGenerating was reset)
+    const applyFn = vi.fn().mockRejectedValue(new Error('PS1 failed'))
+    wp.setApplyWallpaper(applyFn)
+
+    // Should not throw
+    await expect(wp.generateAndApplyWallpaper()).resolves.toBeUndefined()
+
+    // Error should be logged at warn
+    expect(logger.warn).toHaveBeenCalled()
+    // First call took a screenshot
     expect(screenshotMock).toHaveBeenCalledOnce()
+
+    // isGenerating should be reset — second call can proceed (takes another screenshot)
+    await wp.generateAndApplyWallpaper()
+    expect(screenshotMock).toHaveBeenCalledTimes(2)
 
     vi.stubGlobal('process', process)
   })
