@@ -86,3 +86,19 @@ describe('API end-to-end: POST /api/deadlines + GET /api/deadlines', () => {
     expect(bodyText).not.toContain('stack')
   })
 })
+
+describe('REMOTE-04: GET /api/identity debug endpoint', () => {
+  it('returns 200 with { user: "local" } when no Tailscale-User-Login header present', async () => {
+    const res = await app.request('/api/identity')
+    expect(res.status).toBe(200)
+    const body = await res.json() as { user: string }
+    expect(body.user).toBe('local')
+  })
+
+  it('returns 200 with the Tailscale-User-Login header value when present', async () => {
+    const res = await app.request('/api/identity', { headers: { 'Tailscale-User-Login': 'lawyer@example.com' } })
+    expect(res.status).toBe(200)
+    const body = await res.json() as { user: string }
+    expect(body.user).toBe('lawyer@example.com')
+  })
+})

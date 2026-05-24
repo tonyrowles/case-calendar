@@ -4,7 +4,9 @@ export type AppVariables = { user: string }
 
 export const userContextMiddleware = createMiddleware<{ Variables: AppVariables }>(
   async (c, next) => {
-    c.set('user', 'local')  // SAFE-10: placeholder for Phase 8 auth
+    // SAFE-10 + REMOTE-04: Tailscale-User-Login when present (injected by Tailscale Serve), else 'local' fallback
+    const tailscaleLogin = c.req.header('Tailscale-User-Login')?.trim()
+    c.set('user', tailscaleLogin || 'local')
     await next()
   }
 )
