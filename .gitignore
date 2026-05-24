@@ -9,6 +9,7 @@ data/deadlines-test.db-wal
 data/backups-test/
 *.log
 .env*
+!.env.example
 drizzle/migrations/
 .DS_Store
 *.tsbuildinfo
