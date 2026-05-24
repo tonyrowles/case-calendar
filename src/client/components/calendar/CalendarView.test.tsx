@@ -138,12 +138,12 @@ describe('CalendarView FullCalendar props (VIEW-01, VIEW-02) — DOM/grep tests,
     expect(count).toBeGreaterThanOrEqual(1)
   })
 
-  it('C2: passes dayMaxEvents: 3 to FullCalendar', () => {
+  it('C2: passes dayMaxEvents={true} (boolean) to FullCalendar — Phase 7 POLISH-03 changed from fixed 3 to dynamic height', () => {
     const content = readFileSync(
       path.resolve('src/client/components/calendar/CalendarView.tsx'),
       'utf8'
     )
-    const count = (content.match(/dayMaxEvents=\{3\}/g) ?? []).length
+    const count = (content.match(/dayMaxEvents=\{true\}/g) ?? []).length
     expect(count).toBeGreaterThanOrEqual(1)
   })
 

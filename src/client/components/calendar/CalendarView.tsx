@@ -13,6 +13,7 @@ import { toISODateString } from '@/shared/lib/date.js'
 import { classifyDeadline } from '@/shared/lib/buckets.js'
 import { useTypeColors } from '@/client/hooks/useTypeColors.js'
 import { EventPill } from './EventPill.js'
+import { DensityBadge } from './DensityBadge.js'
 import { EventPopover, type EventPopoverEvent } from './EventPopover.js'
 import { ErrorBanner } from '../ErrorBanner.js'
 import { Popover, PopoverContent } from '@/client/components/ui/popover.js'
@@ -161,7 +162,8 @@ function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todaySt
         plugins={[dayGridPlugin, interactionPlugin]}
         initialView="dayGridMonth"
         firstDay={0}
-        dayMaxEvents={3}
+        dayMaxEvents={true}
+        moreLinkContent={(arg) => <DensityBadge count={arg.num} />}
         moreLinkClick="popover"
         editable={false}
         height="auto"

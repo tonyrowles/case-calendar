@@ -60,3 +60,17 @@
 .fc-date-flash {
   animation: fc-date-flash 1.5s ease-in-out forwards;
 }
+
+/* Phase 7 (POLISH-03): Strip FC's default "+N more" link styling entirely.
+   The moreLinkContent render prop returns DensityBadge which owns its own appearance. */
+.fc-more-link {
+  color: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Hover lift — subtle so it doesn't compete with events */
+.fc-more-link:hover .density-badge {
+  background-color: var(--border);
+}
