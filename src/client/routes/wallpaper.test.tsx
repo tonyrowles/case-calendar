@@ -48,11 +48,27 @@ describe('WallpaperView smoke (HOOK-01)', () => {
     expect(() => renderWithQuery(<WallpaperView />)).not.toThrow()
   })
 
-  it('renders 15 columns (1 Overdue + 14 day columns)', () => {
-    // W2: exactly 15 columns via data-testid prefix
-    const { container } = renderWithQuery(<WallpaperView />)
+  it('renders 3 columns (priority | current | later)', () => {
+    // W2: exactly 3 columns via data-testid prefix (new 3-column layout)
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 22))
+    // Need at least one deadline so allEmpty is false and the grid renders
+    const activeDeadline: Deadline = {
+      id: 99,
+      date: '2026-05-01',
+      caseLabel: 'Active Case',
+      typeId: 1,
+      completedAt: null,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      description: null,
+    }
+    const { container } = renderWithQuery(<WallpaperView />, {
+      deadlines: [activeDeadline],
+      types: [mockType],
+    })
     const columns = container.querySelectorAll('[data-testid^="wallpaper-column-"]')
-    expect(columns.length).toBe(15)
+    expect(columns.length).toBe(3)
   })
 
   it('renders "Case Calendar Deadlines" header text', () => {
@@ -61,10 +77,12 @@ describe('WallpaperView smoke (HOOK-01)', () => {
     expect(container.textContent).toContain('Case Calendar Deadlines')
   })
 
-  it('renders "Last updated:" timestamp text', () => {
-    // W4: last-updated label always present
+  it('renders "Last updated" timestamp text in the bottom-right footer', () => {
+    // W4: last-updated label always present (new testid-based assertion)
     const { container } = renderWithQuery(<WallpaperView />)
-    expect(container.textContent).toContain('Last updated:')
+    const footer = container.querySelector('[data-testid="wallpaper-timestamp"]')
+    expect(footer).not.toBeNull()
+    expect(footer!.textContent).toContain('Last updated')
   })
 
   it('applies 7680x2160 container styles (width: 7680px, height: 2160px)', () => {
@@ -78,8 +96,8 @@ describe('WallpaperView smoke (HOOK-01)', () => {
 })
 
 describe('WallpaperView data selection', () => {
-  it('places overdue deadlines (date < today AND completedAt === null) in the Overdue column', () => {
-    // W6: overdue placement — pin system time to 2026-05-22
+  it('places overdue deadlines (date < today AND completedAt === null) in the overdue bucket', () => {
+    // W6: overdue placement — pin system time to 2026-05-22 (now uses wallpaper-bucket-overdue)
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 4, 22)) // May = month index 4
 
@@ -99,13 +117,14 @@ describe('WallpaperView data selection', () => {
       types: [mockType],
     })
 
-    const overdueColumn = container.querySelector('[data-testid="wallpaper-column-overdue"]')
-    expect(overdueColumn).not.toBeNull()
-    expect(overdueColumn!.textContent).toContain('Smith v. State')
+    const overdueBucket = container.querySelector('[data-testid="wallpaper-bucket-overdue"]')
+    expect(overdueBucket).not.toBeNull()
+    expect(overdueBucket!.textContent).toContain('Smith v. State')
   })
 
-  it('places upcoming deadlines (date in next 14 days) in their matching date column', () => {
-    // W7: upcoming placement — pin system time to 2026-05-22
+  it('places upcoming deadlines (date in next 14 days) in their matching week bucket', () => {
+    // W7: upcoming placement — pin system time to 2026-05-22 (Friday)
+    // 2026-05-25 (Monday) is in next-week range [Sun May 24 – Sat May 30]
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 4, 22)) // May = month index 4
 
@@ -125,9 +144,9 @@ describe('WallpaperView data selection', () => {
       types: [mockType],
     })
 
-    const dayColumn = container.querySelector('[data-testid="wallpaper-column-2026-05-25"]')
-    expect(dayColumn).not.toBeNull()
-    expect(dayColumn!.textContent).toContain('Jones v. Corp')
+    const nextWeekBucket = container.querySelector('[data-testid="wallpaper-bucket-nextWeek"]')
+    expect(nextWeekBucket).not.toBeNull()
+    expect(nextWeekBucket!.textContent).toContain('Jones v. Corp')
   })
 
   it('ignores completed deadlines (completedAt !== null) entirely', () => {
@@ -155,8 +174,8 @@ describe('WallpaperView data selection', () => {
     expect(container.textContent).not.toContain('Completed Case')
   })
 
-  it('overdue boundary: today\'s deadline is NOT in overdue column (strict <)', () => {
-    // W9: a deadline dated today is in the day column, not overdue (strict < comparison)
+  it("overdue boundary: today's deadline is NOT in overdue bucket but IS in today bucket", () => {
+    // W9: a deadline dated today is in the today bucket, not overdue (strict < comparison)
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 4, 22))
 
@@ -176,22 +195,38 @@ describe('WallpaperView data selection', () => {
       types: [mockType],
     })
 
-    const overdueColumn = container.querySelector('[data-testid="wallpaper-column-overdue"]')
-    // Today's deadline should NOT be in the overdue column
-    expect(overdueColumn!.textContent).not.toContain('Today Deadline')
+    const overdueBucket = container.querySelector('[data-testid="wallpaper-bucket-overdue"]')
+    // Today's deadline should NOT be in the overdue bucket
+    expect(overdueBucket!.textContent).not.toContain('Today Deadline')
 
-    // It SHOULD appear in the today day column
-    const todayColumn = container.querySelector('[data-testid="wallpaper-column-2026-05-22"]')
-    expect(todayColumn).not.toBeNull()
-    expect(todayColumn!.textContent).toContain('Today Deadline')
+    // It SHOULD appear in the today bucket
+    const todayBucket = container.querySelector('[data-testid="wallpaper-bucket-today"]')
+    expect(todayBucket).not.toBeNull()
+    expect(todayBucket!.textContent).toContain('Today Deadline')
   })
 
-  it('empty overdue column shows "No overdue deadlines." copy', () => {
+  it('empty overdue bucket shows "No overdue deadlines." copy', () => {
     // W10: locked empty-state copy per UI-SPEC §Copywriting Contract
-    const { container } = renderWithQuery(<WallpaperView />)
-    const overdueColumn = container.querySelector('[data-testid="wallpaper-column-overdue"]')
-    expect(overdueColumn).not.toBeNull()
-    expect(overdueColumn!.textContent).toContain('No overdue deadlines.')
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 22))
+    // Need a non-overdue deadline so allEmpty is false and columns render
+    const futureDeadline: Deadline = {
+      id: 20,
+      date: '2026-05-25',
+      caseLabel: 'Future Case',
+      typeId: 1,
+      completedAt: null,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      description: null,
+    }
+    const { container } = renderWithQuery(<WallpaperView />, {
+      deadlines: [futureDeadline],
+      types: [mockType],
+    })
+    const overdueBucket = container.querySelector('[data-testid="wallpaper-bucket-overdue"]')
+    expect(overdueBucket).not.toBeNull()
+    expect(overdueBucket!.textContent).toContain('No overdue deadlines.')
   })
 
   it('XSS guard: caseLabel with HTML payload renders as escaped text (T-02-10)', () => {
@@ -217,5 +252,103 @@ describe('WallpaperView data selection', () => {
 
     // The raw <img src=x onerror= substring must NOT appear in innerHTML
     expect(container.innerHTML).not.toContain('<img src=x onerror=')
+  })
+})
+
+describe('WALL-06: timestamp + 3-column + empty state', () => {
+  it('renders formatted timestamp from ?t= query param', () => {
+    // T-W06-01: May 24 2026 3:30 PM Pacific — TZ env is America/Los_Angeles
+    const t = new Date(2026, 4, 24, 15, 30, 0).getTime()
+    const { container } = renderWithQuery(<WallpaperView />, { initialPath: `/?t=${t}` })
+    const footer = container.querySelector('[data-testid="wallpaper-timestamp"]')
+    expect(footer).not.toBeNull()
+    expect(footer!.textContent).toContain('3:30 PM')
+    expect(footer!.textContent).toContain('May 24, 2026')
+  })
+
+  it('falls back to new Date() when ?t= is absent', () => {
+    // T-W06-02: missing ?t= uses current time (pinned via fake timers)
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 24, 9, 15, 0))
+    const { container } = renderWithQuery(<WallpaperView />)
+    const footer = container.querySelector('[data-testid="wallpaper-timestamp"]')
+    expect(footer).not.toBeNull()
+    expect(footer!.textContent).toContain('Last updated')
+    expect(footer!.textContent).toContain('9:15 AM')
+    expect(footer!.textContent).toContain('May 24, 2026')
+  })
+
+  it('falls back to new Date() when ?t= is non-numeric', () => {
+    // T-W06-03: malformed ?t= (non-numeric) falls back gracefully
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 24, 9, 15, 0))
+    const { container } = renderWithQuery(<WallpaperView />, { initialPath: '/?t=notanumber' })
+    const footer = container.querySelector('[data-testid="wallpaper-timestamp"]')
+    expect(footer!.textContent).toContain('9:15 AM')
+    expect(footer!.textContent).toContain('May 24, 2026')
+  })
+
+  it('3-column structure: priority contains overdue+today; current contains thisWeek+nextWeek; later contains later', () => {
+    // T-W06-04: column hierarchy validated
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 22))
+    // Need a non-empty deadline so the 3-column grid renders (not the allEmpty state)
+    const activeDeadline: Deadline = {
+      id: 30,
+      date: '2026-05-01',
+      caseLabel: 'Active Case',
+      typeId: 1,
+      completedAt: null,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      description: null,
+    }
+    const { container } = renderWithQuery(<WallpaperView />, {
+      deadlines: [activeDeadline],
+      types: [mockType],
+    })
+    const priority = container.querySelector('[data-testid="wallpaper-column-priority"]')
+    expect(priority!.querySelector('[data-testid="wallpaper-bucket-overdue"]')).not.toBeNull()
+    expect(priority!.querySelector('[data-testid="wallpaper-bucket-today"]')).not.toBeNull()
+    const current = container.querySelector('[data-testid="wallpaper-column-current"]')
+    expect(current!.querySelector('[data-testid="wallpaper-bucket-thisWeek"]')).not.toBeNull()
+    expect(current!.querySelector('[data-testid="wallpaper-bucket-nextWeek"]')).not.toBeNull()
+    const later = container.querySelector('[data-testid="wallpaper-column-later"]')
+    expect(later!.querySelector('[data-testid="wallpaper-bucket-later"]')).not.toBeNull()
+  })
+
+  it('renders "All caught up" empty state when no upcoming deadlines AND keeps the timestamp footer', () => {
+    // T-W06-05: empty-state renders correctly; timestamp footer still present
+    const { container } = renderWithQuery(<WallpaperView />)   // empty deadlines by default
+    expect(container.textContent).toContain('All caught up')
+    expect(container.querySelector('[data-testid="wallpaper-timestamp"]')).not.toBeNull()
+    // 3-column grid is NOT rendered when allEmpty
+    expect(container.querySelector('[data-testid="wallpaper-column-priority"]')).toBeNull()
+  })
+
+  it('completed deadlines are always hidden from the wallpaper view regardless of ?completed= param', () => {
+    // T-W06-06: wallpaper uses groupByBucket which always excludes completedAt !== null deadlines.
+    // Unlike the main list view (which toggles completed visibility), the wallpaper is a
+    // display-only view showing upcoming deadlines only — completed items are never rendered.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 22))
+    const completedToday: Deadline = {
+      id: 10,
+      date: '2026-05-22',
+      caseLabel: 'Done Today',
+      typeId: 1,
+      completedAt: '2026-05-22T10:00:00Z',
+      createdAt: '2026-05-22T00:00:00Z',
+      updatedAt: '2026-05-22T10:00:00Z',
+      description: null,
+    }
+    const { container } = renderWithQuery(<WallpaperView />, {
+      deadlines: [completedToday], types: [mockType], initialPath: '/?completed=1',
+    })
+    // The completed deadline should NOT appear even with ?completed=1
+    // because groupByBucket always excludes completedAt !== null items
+    expect(container.textContent).not.toContain('Done Today')
+    // Timestamp footer is still present
+    expect(container.querySelector('[data-testid="wallpaper-timestamp"]')).not.toBeNull()
   })
 })
