@@ -14,7 +14,17 @@
 //   same-origin requests will be 'http://127.0.0.1:3747' — matching the allowlist.
 //   If you ever find CORS failures in production against localhost:3747, add it
 //   to PROD_ORIGINS here and update the cors.test.ts assertions accordingly.
-const PROD_ORIGINS = ['http://127.0.0.1:3747'] as const
+
+// REMOTE-03: optional env var that extends PROD_ORIGINS with http+https variants
+// of a tailnet hostname (Phase 8). Read at module load, never at request time,
+// to keep CORS behavior deterministic per process start.
+const TAILSCALE_HOSTNAME = process.env.TAILSCALE_HOSTNAME?.trim() ?? ''
+
+const PROD_ORIGINS: string[] = ['http://127.0.0.1:3747']
+if (TAILSCALE_HOSTNAME) {
+  PROD_ORIGINS.push(`http://${TAILSCALE_HOSTNAME}`)
+  PROD_ORIGINS.push(`https://${TAILSCALE_HOSTNAME}`)
+}
 
 const DEV_ORIGINS = [
   'http://127.0.0.1:5173',  // Vite dev server via IP
@@ -25,3 +35,5 @@ const DEV_ORIGINS = [
 
 export const CORS_ORIGINS: readonly string[] =
   process.env.NODE_ENV === 'production' ? PROD_ORIGINS : DEV_ORIGINS
+
+export const TAILSCALE_CORS_HOSTNAME = TAILSCALE_HOSTNAME
