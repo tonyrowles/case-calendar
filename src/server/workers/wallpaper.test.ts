@@ -45,6 +45,16 @@ vi.mock('../queries.js', () => ({
   onMutation: vi.fn(),
 }))
 
+// Mock spawn-apply so tests that call setApplyWallpaper(spawnPowerShellApply) inside
+// startWallpaperWorker don't pick up the real spawn impl. Tests override the apply
+// function directly via wp.setApplyWallpaper(vi.fn()) when needed.
+vi.mock('./spawn-apply.js', () => ({
+  spawnPowerShellApply: vi.fn().mockResolvedValue(undefined),
+  buildPowerShellArgs: vi.fn(() => []),
+  __setSpawnForTests: vi.fn(),
+  __resetSpawnForTests: vi.fn(),
+}))
+
 // Mock logger to suppress output in tests
 vi.mock('../logger.js', () => ({
   logger: {
