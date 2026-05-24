@@ -24,6 +24,14 @@ Stack at a glance: Node.js 22 LTS, Hono 4 + Vite 7 + React 19, SQLite via better
 
 ---
 
+## Remote Access
+
+Access Case Calendar from your phone or travel laptop over your private Tailscale network — no public exposure, no app source changes.
+
+See [docs/DEPLOYMENT.md — Remote Access via Tailscale](./docs/DEPLOYMENT.md#remote-access-via-tailscale) for the cold-start setup runbook: prerequisites, `tailscale serve` command, NSSM env var update, verification, troubleshooting.
+
+---
+
 ## SAFE Checklist
 
 Every safety requirement has an automated proof test. Run `cross-env TZ=America/Los_Angeles npm test` to confirm all pass.

@@ -12,7 +12,16 @@ type DocSpec = { path: string; anchors: string[] }
 const DOCS: DocSpec[] = [
   {
     path: 'README.md',
-    anchors: ['# Case Calendar', '## Self-host on Windows', '## SAFE Checklist', 'docs/DEPLOYMENT.md', '| SAFE-01 ', '| SAFE-10 '],
+    anchors: [
+      '# Case Calendar',
+      '## Self-host on Windows',
+      '## SAFE Checklist',
+      'docs/DEPLOYMENT.md',
+      '| SAFE-01 ',
+      '| SAFE-10 ',
+      '## Remote Access',
+      'docs/DEPLOYMENT.md#remote-access-via-tailscale',
+    ],
   },
   {
     path: 'docs/README.md',
@@ -33,6 +42,11 @@ const DOCS: DocSpec[] = [
       'scripts\\nssm-install.ps1',
       '127.0.0.1:3747',
       'Pacific Standard Time',
+      '## Remote Access via Tailscale',
+      'tailscale serve --bg http://127.0.0.1:3747',
+      'TAILSCALE_HOSTNAME',
+      'Tailscale-User-Login',
+      '/api/identity',
     ],
   },
   {
@@ -51,7 +65,7 @@ const DOCS: DocSpec[] = [
   },
 ]
 
-describe('OPS-03: Phase 6 documentation artifacts exist with required anchors', () => {
+describe('OPS-03 + REMOTE-01/02: Phase 6 + Phase 8 documentation artifacts exist with required anchors', () => {
   for (const doc of DOCS) {
     describe(doc.path, () => {
       it('file exists', () => {
