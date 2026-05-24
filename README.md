@@ -32,6 +32,14 @@ See [docs/DEPLOYMENT.md — Remote Access via Tailscale](./docs/DEPLOYMENT.md#re
 
 ---
 
+## Desktop Wallpaper
+
+Your Windows desktop wallpaper auto-regenerates from the deadline view every 30 minutes — and within about 10 seconds of any deadline change — so the next time you press Win+D the latest case deadlines are right there. Renders at 7680x2160 for the 57" Odyssey Neo G9 and collapses gracefully at smaller resolutions.
+
+See [docs/DEPLOYMENT.md — Desktop Wallpaper](./docs/DEPLOYMENT.md#desktop-wallpaper-phase-9) for the install runbook: Playwright Chromium install, NSSM Session 0 fix, DPI guidance, manual debug, and the Task Scheduler alternative.
+
+---
+
 ## SAFE Checklist
 
 Every safety requirement has an automated proof test. Run `cross-env TZ=America/Los_Angeles npm test` to confirm all pass.
