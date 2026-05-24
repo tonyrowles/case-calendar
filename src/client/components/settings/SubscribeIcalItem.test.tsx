@@ -6,6 +6,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { SubscribeIcalItem } from './SubscribeIcalItem.js'
 
+// Hoist mock to top level (required by vitest module mocking rules)
+vi.mock('@/client/lib/api.js', () => ({
+  getDeadlineTypes: vi.fn().mockResolvedValue([]),
+  createDeadlineType: vi.fn(),
+  updateDeadlineType: vi.fn(),
+  deleteDeadlineType: vi.fn(),
+}))
+
 const WEBCAL_URL = 'webcal://localhost:3747/api/deadlines.ics'
 
 // Restore clipboard after each test
@@ -92,14 +100,6 @@ describe('SubscribeIcalItem', () => {
   })
 
   it('Test 5 (settings integration smoke): SubscribeIcalItem heading visible when settings page renders', async () => {
-    // Mock API to prevent network calls
-    vi.mock('@/client/lib/api.js', () => ({
-      getDeadlineTypes: vi.fn().mockResolvedValue([]),
-      createDeadlineType: vi.fn(),
-      updateDeadlineType: vi.fn(),
-      deleteDeadlineType: vi.fn(),
-    }))
-
     const { SettingsPage } = await import('../../routes/settings.js')
     const queryClient = new QueryClient({
       defaultOptions: {

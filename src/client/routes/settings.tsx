@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getDeadlineTypes } from '@/client/lib/api.js'
 import { TypeListItem } from '@/client/components/settings/TypeListItem.js'
 import { AddTypeRow } from '@/client/components/settings/AddTypeRow.js'
+import { SubscribeIcalItem } from '@/client/components/settings/SubscribeIcalItem.js'
 
 export function SettingsPage() {
   const typesQuery = useQuery({
@@ -55,6 +56,13 @@ export function SettingsPage() {
             <AddTypeRow />
           </div>
         )}
+      </section>
+
+      <section className="mt-8">
+        <h3 className="text-xl font-semibold mb-4">Calendar Subscription</h3>
+        <div className="rounded-lg border bg-card overflow-hidden">
+          <SubscribeIcalItem />
+        </div>
       </section>
     </div>
   )
