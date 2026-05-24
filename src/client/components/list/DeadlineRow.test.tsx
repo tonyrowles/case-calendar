@@ -7,8 +7,8 @@
 //                today   = bg-amber-50 + border-l-4 border-amber-500 + text-amber-700
 //                other   = bg-card, no left border
 import React from 'react'
-import { describe, it, expect, afterEach } from 'vitest'
-import { render, cleanup } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, cleanup, fireEvent } from '@testing-library/react'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
 import { DeadlineRow } from './DeadlineRow.js'
 
@@ -108,5 +108,72 @@ describe('DeadlineRow — Wave 0 stubs (VIEW-04)', () => {
     const dot = dots[0] as HTMLElement
     // jsdom normalizes hex to rgb() but preserves named colors — check for green
     expect(dot.style.backgroundColor).toBe(customColor)
+  })
+})
+
+describe('POLISH-04: DeadlineRow Duplicate row action', () => {
+  it('DR-DUP-1: Duplicate button is in the DOM when onDuplicate is provided and uses hover-reveal + focus-visible classes', () => {
+    const onDuplicate = vi.fn()
+    const { container } = render(
+      <DeadlineRow
+        deadline={makeDeadline()}
+        bucket="thisWeek"
+        typesById={typesById}
+        getColor={getColor}
+        onDuplicate={onDuplicate}
+      />
+    )
+    const btn = container.querySelector('button[aria-label="Duplicate Smith v. Jones"]') as HTMLButtonElement | null
+    expect(btn).not.toBeNull()
+    expect(btn!.className).toContain('opacity-0')
+    expect(btn!.className).toContain('group-hover:opacity-100')
+    expect(btn!.className).toContain('focus-visible:opacity-100')
+  })
+
+  it('DR-DUP-2: Clicking Duplicate calls onDuplicate(deadline.id) and stops propagation (row onClick NOT fired)', () => {
+    const onDuplicate = vi.fn()
+    const onRowClick = vi.fn()
+    const { container } = render(
+      <DeadlineRow
+        deadline={makeDeadline({ id: 42 })}
+        bucket="thisWeek"
+        typesById={typesById}
+        getColor={getColor}
+        onDuplicate={onDuplicate}
+        onRowClick={onRowClick}
+      />
+    )
+    const btn = container.querySelector('button[aria-label="Duplicate Smith v. Jones"]') as HTMLButtonElement
+    fireEvent.click(btn)
+    expect(onDuplicate).toHaveBeenCalledTimes(1)
+    expect(onDuplicate).toHaveBeenCalledWith(42)
+    expect(onRowClick).not.toHaveBeenCalled()
+  })
+
+  it('DR-DUP-3: Duplicate button not rendered when onDuplicate prop is omitted', () => {
+    const { container } = render(
+      <DeadlineRow
+        deadline={makeDeadline()}
+        bucket="thisWeek"
+        typesById={typesById}
+        getColor={getColor}
+      />
+    )
+    expect(container.querySelector('button[aria-label="Duplicate Smith v. Jones"]')).toBeNull()
+  })
+
+  it('DR-DUP-4: Delete button has focus-visible:opacity-100 (Pitfall 7 regression guard)', () => {
+    const { container } = render(
+      <DeadlineRow
+        deadline={makeDeadline()}
+        bucket="thisWeek"
+        typesById={typesById}
+        getColor={getColor}
+        onDelete={() => {}}
+      />
+    )
+    const del = container.querySelector('button[aria-label="Delete deadline Smith v. Jones"]') as HTMLButtonElement
+    expect(del).not.toBeNull()
+    expect(del.className).toContain('focus-visible:opacity-100')
   })
 })

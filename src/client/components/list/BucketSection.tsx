@@ -13,6 +13,7 @@ export interface BucketSectionProps {
   onRowClick?: (id: number) => void
   onComplete?: (id: number, completed: boolean) => void
   onDelete?: (id: number, onError: () => void) => void
+  onDuplicate?: (id: number) => void
   selectedDeadlineId?: number | null
   /** Forwarded from ListView → DeadlineRow for keyboard-driven 2-step delete (KBD-03) */
   deleteTriggerSignal?: { id: number; nonce: number } | null
@@ -27,6 +28,7 @@ export function BucketSection({
   onRowClick,
   onComplete,
   onDelete,
+  onDuplicate,
   selectedDeadlineId,
   deleteTriggerSignal,
 }: BucketSectionProps): React.JSX.Element {
@@ -72,6 +74,7 @@ export function BucketSection({
               onRowClick={onRowClick}
               onComplete={onComplete}
               onDelete={onDelete}
+              onDuplicate={onDuplicate}
               selectedDeadlineId={selectedDeadlineId}
               deleteTriggerSignal={deleteTriggerSignal}
             />

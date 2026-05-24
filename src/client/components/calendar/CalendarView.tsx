@@ -31,6 +31,8 @@ export interface CalendarViewProps {
   todayStr?: string         // OPTIONAL — when undefined, fall back to local derivation
   /** Called when user clicks an event pill (lifts selectedDeadlineId to App) */
   onEventClick?: (id: number) => void
+  /** Called when the Duplicate Deadline button is clicked inside the EventPopover (POLISH-04) */
+  onDuplicate?: (id: number) => void
 }
 
 // Pure helper exported for unit testing (SAFE-01/02 proof targets).
@@ -91,7 +93,7 @@ function dayCellContent(arg: DayCellContentArg) {
 }
 
 export const CalendarView = forwardRef<CalendarViewHandle, CalendarViewProps>(
-function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todayStrProp, onEventClick }: CalendarViewProps, ref): React.JSX.Element {
+function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todayStrProp, onEventClick, onDuplicate }: CalendarViewProps, ref): React.JSX.Element {
   // Imperative handle: expose jumpToToday() to parent (App.tsx) for the 't' keyboard shortcut
   const calendarApiRef = useRef<FullCalendar>(null)
   useImperativeHandle(ref, () => ({
@@ -187,6 +189,7 @@ function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todaySt
         eventClick={(arg: EventClickArg) => {
           virtualAnchorRef.current = arg.el
           setSelectedEvent({
+            id: Number(arg.event.id),
             caseLabel: arg.event.extendedProps.caseLabel as string,
             typeId: arg.event.extendedProps.typeId as number,
             typeName: arg.event.extendedProps.typeName as string,
@@ -207,6 +210,7 @@ function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todaySt
             <EventPopover
               event={selectedEvent}
               getColor={getColor}
+              onDuplicate={onDuplicate ? (id) => { onDuplicate(id); setPopoverOpen(false) } : undefined}
             />
           )}
         </PopoverContent>

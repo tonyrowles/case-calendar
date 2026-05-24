@@ -25,6 +25,8 @@ export interface ListViewProps {
   onRowClick?: (id: number) => void
   onComplete?: (id: number, completed: boolean) => void
   onDelete?: (id: number, onError: () => void) => void
+  /** Forwarded to each DeadlineRow for the Duplicate row action (POLISH-04) */
+  onDuplicate?: (id: number) => void
   selectedDeadlineId?: number | null
   /** Forwarded to each DeadlineRow for keyboard-driven 2-step delete (KBD-03) */
   deleteTriggerSignal?: { id: number; nonce: number } | null
@@ -39,6 +41,7 @@ export function ListView({
   onRowClick,
   onComplete,
   onDelete,
+  onDuplicate,
   selectedDeadlineId,
   deleteTriggerSignal,
 }: ListViewProps): React.JSX.Element {
@@ -127,6 +130,7 @@ export function ListView({
           onRowClick={onRowClick}
           onComplete={onComplete}
           onDelete={onDelete}
+          onDuplicate={onDuplicate}
           selectedDeadlineId={selectedDeadlineId}
           deleteTriggerSignal={deleteTriggerSignal}
         />

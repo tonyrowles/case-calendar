@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
+import { Copy } from 'lucide-react'
 import { parseLocalDate } from '@/shared/lib/date.js'
 import type { Bucket } from '@/shared/lib/buckets.js'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
@@ -20,6 +21,8 @@ export interface DeadlineRowProps {
    *  The second argument is a reset callback; callers must invoke it on failure
    *  to return the row from 'executing' to 'idle' (WR-01). */
   onDelete?: (id: number, onError: () => void) => void
+  /** Called when the Duplicate row-action is clicked (POLISH-04) */
+  onDuplicate?: (id: number) => void
   /** When set, this row shows the selected-row highlight */
   selectedDeadlineId?: number | null
   /** Keyboard delete signal (KBD-03): when nonce changes and id matches, advance deleteStep idle→confirm.
@@ -35,6 +38,7 @@ export function DeadlineRow({
   onRowClick,
   onComplete,
   onDelete,
+  onDuplicate,
   selectedDeadlineId,
   deleteTriggerSignal,
 }: DeadlineRowProps): React.JSX.Element {
@@ -184,7 +188,22 @@ export function DeadlineRow({
         )}
       </span>
 
-      {/* Delete button — 2-step inline confirm; hidden until row hover */}
+      {/* Duplicate button — hidden until row hover or focus-visible (POLISH-04). Only during idle delete-step. */}
+      {deleteStep === 'idle' && onDuplicate && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDuplicate(deadline.id)
+          }}
+          className="shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity h-7 px-2 text-sm text-muted-foreground hover:text-foreground rounded"
+          aria-label={`Duplicate ${deadline.caseLabel}`}
+        >
+          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      )}
+
+      {/* Delete button — 2-step inline confirm; hidden until row hover or focus-visible (Pitfall 7) */}
       {deleteStep === 'idle' && (
         <button
           type="button"
@@ -192,7 +211,7 @@ export function DeadlineRow({
             e.stopPropagation()
             advanceDelete()
           }}
-          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity h-7 px-2 text-sm text-muted-foreground hover:text-destructive rounded"
+          className="shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity h-7 px-2 text-sm text-muted-foreground hover:text-destructive rounded"
           aria-label={`Delete deadline ${deadline.caseLabel}`}
         >
           Delete

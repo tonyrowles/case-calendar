@@ -36,6 +36,9 @@ export function App() {
   const [jumpDialogOpen, setJumpDialogOpen] = useState(false)
   const [deleteTriggerSignal, setDeleteTriggerSignal] = useState<{ id: number; nonce: number } | null>(null)
 
+  // POLISH-04: duplicate source — when set, DeadlineForm receives prefillValues
+  const [duplicateSource, setDuplicateSource] = useState<import('@/shared/schemas/deadline.js').Deadline | null>(null)
+
   // Phase 5: imperative ref to CalendarView for 't' shortcut
   const calendarRef = useRef<CalendarViewHandle>(null)
 
@@ -181,6 +184,12 @@ export function App() {
     setJumpDialogOpen(true)
   }, [])
 
+  // POLISH-04: lookup the source deadline by id and set as duplicate source.
+  const onDuplicate = useCallback((id: number) => {
+    const source = deadlinesQuery.data?.find(d => d.id === id) ?? null
+    setDuplicateSource(source)
+  }, [deadlinesQuery.data])
+
   // Mount keyboard shortcuts hook with all handlers
   useKeyboardShortcuts({
     onNewDeadline,
@@ -204,6 +213,7 @@ export function App() {
         deadlines={filteredDeadlines}
         todayStr={todayStr}
         onEventClick={(id) => selectDeadline(id === selectedDeadlineId ? -1 : id)}
+        onDuplicate={onDuplicate}
       />
     </section>
   )
@@ -229,6 +239,7 @@ export function App() {
       }}
       selectedDeadlineId={selectedDeadlineId}
       deleteTriggerSignal={deleteTriggerSignal}
+      onDuplicate={onDuplicate}
     />
   )
 
@@ -237,13 +248,21 @@ export function App() {
       <DeadlineForm
         selectedDate={selectedDate}
         deadline={selectedDeadline}
+        prefillValues={duplicateSource ? {
+          date: duplicateSource.date,
+          caseLabel: duplicateSource.caseLabel,
+          typeId: duplicateSource.typeId,
+          description: duplicateSource.description ?? '',
+        } : undefined}
         onCancel={() => {
           setSelectedDeadlineId(null)
           setSelectedDeadlineIndex(null)
+          setDuplicateSource(null)
         }}
         onSuccess={() => {
           setSelectedDeadlineId(null)
           setSelectedDeadlineIndex(null)
+          setDuplicateSource(null)
         }}
       />
     </section>
