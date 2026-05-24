@@ -46,3 +46,17 @@
 .fc-completed .fc-event-main {
   opacity: 0.5;
 }
+
+/* Phase 7 (POLISH-02): Flash animation for jump-to-date navigation destination.
+   Amber matches today-cell treatment (text-amber-700 = #B45309).
+   Duration 1.5s total: brief fade-in, hold, fade-out. */
+@keyframes fc-date-flash {
+  0%   { outline: 2px solid transparent; outline-offset: -2px; }
+  20%  { outline: 2px solid #B45309; outline-offset: -2px; }
+  80%  { outline: 2px solid #B45309; outline-offset: -2px; }
+  100% { outline: 2px solid transparent; outline-offset: -2px; }
+}
+
+.fc-date-flash {
+  animation: fc-date-flash 1.5s ease-in-out forwards;
+}

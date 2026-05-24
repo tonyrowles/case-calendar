@@ -9,6 +9,7 @@ export interface ShortcutHandlers {
   onMovePrev: () => void          // k (when not chorded with meta/ctrl)
   onOpenHelp: () => void          // ?
   onOpenCommandK: () => void      // Cmd+K / Ctrl+K
+  onJumpToDate: () => void        // g
 }
 
 const TYPING_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
@@ -69,6 +70,10 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
         case 't':
           e.preventDefault()
           handlersRef.current.onJumpToday()
+          break
+        case 'g':
+          e.preventDefault()
+          handlersRef.current.onJumpToDate()
           break
         case 'j':
           e.preventDefault()

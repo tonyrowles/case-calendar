@@ -9,6 +9,7 @@ import { FilterBar } from './components/filters/FilterBar.js'
 import { PaneLayout } from './components/layout/PaneLayout.js'
 import { ShortcutsDialog } from './components/help/ShortcutsDialog.js'
 import { CommandPaletteShell } from './components/help/CommandPaletteShell.js'
+import { JumpToDateDialog } from './components/JumpToDateDialog.js'
 import { useFilters } from './hooks/useFilters.js'
 import { useDeadlineMutations } from './hooks/useDeadlineMutations.js'
 import { useDocumentTitle } from './hooks/useDocumentTitle.js'
@@ -32,6 +33,7 @@ export function App() {
   const [selectedDeadlineIndex, setSelectedDeadlineIndex] = useState<number | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [commandKOpen, setCommandKOpen] = useState(false)
+  const [jumpDialogOpen, setJumpDialogOpen] = useState(false)
   const [deleteTriggerSignal, setDeleteTriggerSignal] = useState<{ id: number; nonce: number } | null>(null)
 
   // Phase 5: imperative ref to CalendarView for 't' shortcut
@@ -174,6 +176,11 @@ export function App() {
     setCommandKOpen(true)
   }, [])
 
+  // POLISH-02: 'g' — open jump-to-date dialog.
+  const onJumpToDate = useCallback(() => {
+    setJumpDialogOpen(true)
+  }, [])
+
   // Mount keyboard shortcuts hook with all handlers
   useKeyboardShortcuts({
     onNewDeadline,
@@ -184,6 +191,7 @@ export function App() {
     onMovePrev,
     onOpenHelp,
     onOpenCommandK,
+    onJumpToDate,
   })
 
   // ── Slot content ─────────────────────────────────────────────────────────────
@@ -266,6 +274,14 @@ export function App() {
         {/* Dialogs mount unconditionally — Radix portals content only when open */}
         <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
         <CommandPaletteShell open={commandKOpen} onOpenChange={setCommandKOpen} />
+        <JumpToDateDialog
+          open={jumpDialogOpen}
+          onOpenChange={setJumpDialogOpen}
+          onDateSelect={(isoDateStr) => {
+            setJumpDialogOpen(false)
+            calendarRef.current?.jumpToDate(isoDateStr)
+          }}
+        />
       </main>
     </div>
   )

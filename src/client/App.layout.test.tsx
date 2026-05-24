@@ -267,6 +267,30 @@ describe('App layout integration', () => {
     }, { timeout: 3000 })
   })
 
+  it("pressing g opens JumpToDateDialog (POLISH-02 wiring)", async () => {
+    mockTier('three')
+    renderApp('/?range=all', qc => {
+      qc.setQueryData(['deadlines'], [])
+      qc.setQueryData(['deadline-types'], [TYPE_FILING])
+      qc.setQueryData(['case-labels'], [])
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByText('Add Deadline')).toBeTruthy()
+    }, { timeout: 3000 })
+
+    // Dialog should not be open initially
+    expect(screen.queryByText('Go to date')).toBeNull()
+
+    // Fire 'g' from the window (not from an input)
+    fireEvent.keyDown(window, { key: 'g' })
+
+    // JumpToDateDialog should now be open with its title
+    await waitFor(() => {
+      expect(screen.queryByText('Go to date')).toBeTruthy()
+    }, { timeout: 3000 })
+  })
+
   it("Phase 1-4 regression: settings link still works", async () => {
     mockTier('one')
     renderApp('/', qc => {

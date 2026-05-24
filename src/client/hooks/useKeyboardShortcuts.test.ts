@@ -14,6 +14,7 @@ function makeHandlers(): ShortcutHandlers {
     onMovePrev: vi.fn(),
     onOpenHelp: vi.fn(),
     onOpenCommandK: vi.fn(),
+    onJumpToDate: vi.fn(),
   }
 }
 
@@ -251,5 +252,28 @@ describe('useKeyboardShortcuts', () => {
 
       expect(handlers.onOpenCommandK).toHaveBeenCalledOnce()
     })
+  })
+
+  it("g fires onJumpToDate (KBD-08)", () => {
+    const handlers = makeHandlers()
+    renderHook(() => useKeyboardShortcuts(handlers))
+
+    fireEvent.keyDown(window, { key: 'g' })
+
+    expect(handlers.onJumpToDate).toHaveBeenCalledOnce()
+    expect(handlers.onNewDeadline).not.toHaveBeenCalled()
+  })
+
+  it("g does NOT fire onJumpToDate when active element is INPUT (KBD-08 typing guard)", () => {
+    const handlers = makeHandlers()
+    renderHook(() => useKeyboardShortcuts(handlers))
+
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.focus()
+
+    fireEvent.keyDown(input, { key: 'g' })
+
+    expect(handlers.onJumpToDate).not.toHaveBeenCalled()
   })
 })
