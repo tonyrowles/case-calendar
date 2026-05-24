@@ -35,13 +35,20 @@ export interface DeadlineFormProps {
   selectedDate?: string
   /** When set, the form is in edit mode — fields prefilled from this deadline */
   deadline?: Deadline | null
+  /**
+   * When set, the form opens in CREATE mode with these fields pre-filled.
+   * If both `deadline` (edit mode) and `prefillValues` are passed, `deadline` wins.
+   * Use for the Quick-Duplicate flow (POLISH-04): App lifts a `duplicateSource`
+   * state and threads its fields here.
+   */
+  prefillValues?: Partial<DeadlineCreate>
   /** Called when the Cancel button is clicked in edit mode */
   onCancel?: () => void
   /** Called after a successful save (edit or create) — parent uses this to clear selectedDeadlineId */
   onSuccess?: () => void
 }
 
-export function DeadlineForm({ selectedDate, deadline, onCancel, onSuccess }: DeadlineFormProps = {}) {
+export function DeadlineForm({ selectedDate, deadline, prefillValues, onCancel, onSuccess }: DeadlineFormProps = {}) {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [dateOpen, setDateOpen] = useState(false)
   const queryClient = useQueryClient()
@@ -141,6 +148,21 @@ export function DeadlineForm({ selectedDate, deadline, onCancel, onSuccess }: De
     }
     setFocus('caseLabel')
   }, [selectedDate, setValue, setFocus, isEdit])
+
+  // POLISH-04: prefillValues effect — mirrors selectedDate effect.
+  // Short-circuits when in edit mode so `deadline` wins on conflict (per CONTEXT.md decision + Pitfall 6).
+  useEffect(() => {
+    if (!prefillValues || isEdit) return
+    if (prefillValues.date) setValue('date', prefillValues.date, { shouldValidate: true, shouldDirty: true })
+    if (prefillValues.caseLabel) setValue('caseLabel', prefillValues.caseLabel, { shouldValidate: true, shouldDirty: true })
+    if (prefillValues.typeId) setValue('typeId', prefillValues.typeId, { shouldValidate: true, shouldDirty: true })
+    if (prefillValues.description !== undefined) setValue('description', prefillValues.description ?? '')
+    if (typeof formRef.current?.scrollIntoView === 'function') {
+      formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+    setFocus('caseLabel')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillValues])
 
   async function onSubmit(data: DeadlineCreate) {
     if (isEdit && deadline) {
