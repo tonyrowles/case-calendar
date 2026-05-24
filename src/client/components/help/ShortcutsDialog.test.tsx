@@ -38,14 +38,14 @@ afterEach(() => {
 })
 
 describe('ShortcutsDialog', () => {
-  it("renders all 9 keyboard shortcut keys when open=true (KBD-07)", () => {
+  it("renders all 10 keyboard shortcut keys when open=true (KBD-07)", () => {
     render(<ShortcutsDialog open={true} onOpenChange={vi.fn()} />)
     expect(screen.queryByText('Keyboard Shortcuts')).not.toBeNull()
-    // 8 rows covering 9 keys
-    expect(screen.getAllByRole('row')).toHaveLength(8)
+    // 9 rows covering 10 keys (j/k share a row, ⌘K/Ctrl+K share a row; g gets its own row per POLISH-02)
+    expect(screen.getAllByRole('row')).toHaveLength(9)
     // Radix portals content to document.body — query kbd from document, not container
     const kbdTexts = Array.from(document.querySelectorAll('kbd')).map(el => el.textContent)
-    const expectedKeys = ['n', 'e', 'Delete', 't', 'j', 'k', '?', '⌘K', 'Esc']
+    const expectedKeys = ['n', 'e', 'Delete', 't', 'g', 'j', 'k', '?', '⌘K', 'Esc']
     for (const key of expectedKeys) {
       expect(kbdTexts).toContain(key)
     }

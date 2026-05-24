@@ -18,9 +18,10 @@ import { ErrorBanner } from '../ErrorBanner.js'
 import { Popover, PopoverContent } from '@/client/components/ui/popover.js'
 import './calendar.css'
 
-/** Imperative handle exposed via forwardRef — consumers call ref.current?.jumpToToday() */
+/** Imperative handle exposed via forwardRef — consumers call ref.current?.jumpToToday() or ref.current?.jumpToDate(isoDateStr) */
 export interface CalendarViewHandle {
   jumpToToday: () => void
+  jumpToDate: (isoDateStr: string) => void
 }
 
 export interface CalendarViewProps {
@@ -94,6 +95,20 @@ function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todaySt
   const calendarApiRef = useRef<FullCalendar>(null)
   useImperativeHandle(ref, () => ({
     jumpToToday: () => { calendarApiRef.current?.getApi().today() },
+    jumpToDate: (isoDateStr: string) => {
+      // Pass ISO string directly — gotoDate accepts string as DateInput (RESEARCH Finding 2, SAFE-03)
+      calendarApiRef.current?.getApi().gotoDate(isoDateStr)
+      // setTimeout(0): yield so FC re-renders the new month before DOM query (Pitfall 4)
+      setTimeout(() => {
+        const cell = document.querySelector(`[data-date="${isoDateStr}"]`)
+        if (!cell) return
+        // Reset for rapid re-trigger: remove class, force reflow, re-add
+        cell.classList.remove('fc-date-flash')
+        void (cell as HTMLElement).offsetHeight  // force reflow so animation restarts
+        cell.classList.add('fc-date-flash')
+        setTimeout(() => cell.classList.remove('fc-date-flash'), 1500)
+      }, 0)
+    },
   }), [])
 
   // When deadlinesProp is provided (Phase 3+ App wires filtered dataset), use it.
