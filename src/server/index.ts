@@ -36,6 +36,9 @@ app.use('*', userContextMiddleware)
 // SAFE-06 + V7: Global error handler — never leaks stack traces to client
 app.onError(createErrorHandler())
 
+// REMOTE-04 debug: echoes resolved user identity (Tailscale-User-Login or 'local'). Useful for verifying the tailnet header path from a phone. GET-only, no DB.
+app.get('/api/identity', (c) => c.json({ user: c.get('user') }))
+
 // Routes
 app.route('/api', deadlinesRouter)
 app.route('/api', deadlineTypesRouter)
