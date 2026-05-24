@@ -24,6 +24,7 @@ import { CORS_ORIGINS, TAILSCALE_CORS_HOSTNAME } from './cors.js'
 // seedDeadlineTypes is created by Plan 01-03 — both plans are wave 2 siblings
 import { seedDeadlineTypes } from './seed.js'
 import { startWallpaperWorker } from './workers/wallpaper.js'
+import { startEmailWorker } from './workers/email.js'
 
 export const app = new Hono<{ Variables: AppVariables }>()
 
@@ -106,6 +107,7 @@ if (process.env.VITEST !== 'true') {
         )
       }
       startWallpaperWorker()   // WALL-01/02/04/05: fire-and-forget; non-blocking
+      void startEmailWorker()  // EMAIL-01/02/03: async; no-op when unconfigured; never blocks server boot
     }
   )
 }

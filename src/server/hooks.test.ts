@@ -37,10 +37,9 @@ describe('HOOK-02: Worker stub files exist with correct exports', () => {
     expect(startWallpaperWorker.name).toBe('startWallpaperWorker')
   })
 
-  it('startEmailWorker is a no-op (returns undefined, does not throw)', async () => {
+  it('startEmailWorker is named (Phase 10: not the original anonymous no-op stub)', async () => {
     const { startEmailWorker } = await import('./workers/email.js')
-    expect(() => startEmailWorker()).not.toThrow()
-    expect(startEmailWorker()).toBeUndefined()
+    expect(startEmailWorker.name).toBe('startEmailWorker')
   })
 })
 
