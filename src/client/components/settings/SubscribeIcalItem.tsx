@@ -41,39 +41,43 @@ export function SubscribeIcalItem(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-border last:border-0">
-      <Calendar className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+    <div className="flex flex-col gap-1 py-3 border-b border-border last:border-0">
+      {/* Main row: icon + description + copy button + sr-only live region */}
+      <div className="flex items-center gap-3">
+        <Calendar className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
 
-      <div className="flex-1 min-w-0" id="subscribe-ical-desc">
-        <p className="text-sm font-medium text-foreground">Subscribe (iCal)</p>
-        <p className="text-xs text-muted-foreground">
-          Copy the webcal:// link to subscribe in Outlook or Apple Calendar
-        </p>
+        <div className="flex-1 min-w-0" id="subscribe-ical-desc">
+          <p className="text-sm font-medium text-foreground">Subscribe (iCal)</p>
+          <p className="text-xs text-muted-foreground">
+            Copy the webcal:// link to subscribe in Outlook or Apple Calendar
+          </p>
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleCopy}
+          aria-label={copyStatus === 'copied' ? 'Link copied' : 'Copy iCal subscription link'}
+          aria-describedby="subscribe-ical-desc"
+        >
+          {copyStatus === 'copied' ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+        </Button>
+
+        {/* aria-live region for screen reader announcement */}
+        <span aria-live="polite" className="sr-only">
+          {copyStatus === 'copied' ? 'Copied!' : copyStatus === 'failed' ? 'Copy failed' : ''}
+        </span>
       </div>
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={handleCopy}
-        aria-label={copyStatus === 'copied' ? 'Link copied' : 'Copy iCal subscription link'}
-        aria-describedby="subscribe-ical-desc"
-      >
-        {copyStatus === 'copied' ? (
-          <Check className="h-3.5 w-3.5" />
-        ) : (
-          <Copy className="h-3.5 w-3.5" />
-        )}
-      </Button>
-
-      {/* aria-live region for screen reader announcement */}
-      <span aria-live="polite" className="sr-only">
-        {copyStatus === 'copied' ? 'Copied!' : copyStatus === 'failed' ? 'Copy failed' : ''}
-      </span>
-
-      {/* Failure fallback: show the raw URL for manual copy */}
+      {/* Failure fallback: show the raw URL below the row for manual copy (WR-01).
+          pl-7 aligns the URL text under the description, past the icon column. */}
       {copyStatus === 'failed' && (
-        <p className="text-xs text-muted-foreground mt-1 break-all">{WEBCAL_URL}</p>
+        <p className="text-xs text-muted-foreground break-all pl-7">{WEBCAL_URL}</p>
       )}
     </div>
   )
