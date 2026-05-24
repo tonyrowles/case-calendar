@@ -75,9 +75,11 @@ function formatLine(d: DigestDeadline): string {
 /**
  * Build a single deadline row for HTML email output.
  * Applies escHtml to all user-provided fields.
- * typeColor is used verbatim (DB-validated hex from deadline_types.color — T-10-CSS accepted risk).
+ * typeColor is validated at render time: must match /^#[0-9A-Fa-f]{6}$/ or falls back to #6b7280.
+ * Defense-in-depth: protects against DB values that bypassed Zod validation at write time.
  */
 function rowTemplate(d: DigestDeadline): string {
+  const safeColor = /^#[0-9A-Fa-f]{6}$/.test(d.typeColor) ? d.typeColor : '#6b7280'
   const descSpan =
     d.description && d.description.length > 0
       ? `<span style="color:#6b7280;font-size:13px;margin-left:6px;">${escHtml(d.description)}</span>`
@@ -85,7 +87,7 @@ function rowTemplate(d: DigestDeadline): string {
   return (
     `<tr><td style="padding:10px 24px;border-bottom:1px solid #e5e7eb;">` +
     `<strong>${escHtml(d.caseLabel)}</strong>` +
-    `<span style="background:${d.typeColor};color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase;margin-left:6px;">${escHtml(d.typeName)}</span>` +
+    `<span style="background:${safeColor};color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase;margin-left:6px;">${escHtml(d.typeName)}</span>` +
     `${descSpan}` +
     `</td></tr>`
   )
