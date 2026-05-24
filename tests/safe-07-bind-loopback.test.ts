@@ -7,20 +7,39 @@
  * loopback interface — never exposed to external networks.
  *
  * The test uses port 0 (OS-assigned) to avoid port conflicts with the dev server.
- * It closes the server immediately after the address assertion.
- *
- * Pattern: uses app.request() in-process for fast tests; uses serve() only
- * for the bind-address check (same pattern as src/server/cors.test.ts).
- *
- * Wave 0 (this file): RED stub — fails immediately with a MISSING message.
- * Wave 1 (Plan 02): Implements real serve() bind + address assertion + server.close().
+ * It closes the server in afterAll after the address assertion.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterAll } from 'vitest'
+import { serve } from '@hono/node-server'
+import type { AddressInfo } from 'node:net'
+import { app } from '../src/server/index.js'
 
 describe('SAFE-07: Hono server binds 127.0.0.1, never 0.0.0.0', () => {
-  it('serve() with hostname 127.0.0.1 reports address 127.0.0.1 (not 0.0.0.0 or ::)', () => {
-    expect.fail(
-      'MISSING — Wave 1 will implement: Plan 02 will import { serve } from \'@hono/node-server\' and { app } from \'../src/server/index.js\', call serve({ fetch: app.fetch, port: 0, hostname: \'127.0.0.1\' }), assert server.address().address === \'127.0.0.1\', then server.close()'
-    )
+  let server: ReturnType<typeof serve> | null = null
+  let boundAddr: AddressInfo | null = null
+
+  afterAll(() => {
+    if (server) server.close()
+  })
+
+  it('serve() with hostname 127.0.0.1 reports address 127.0.0.1 (not 0.0.0.0 or ::)', async () => {
+    // serve() calls server.listen() asynchronously; use the listeningListener
+    // callback to get the address after the OS has completed the bind.
+    await new Promise<void>((resolve) => {
+      server = serve(
+        { fetch: app.fetch, port: 0, hostname: '127.0.0.1' },
+        (info) => {
+          boundAddr = info as AddressInfo
+          resolve()
+        }
+      )
+    })
+
+    expect(boundAddr).toBeTruthy()
+    expect((boundAddr as AddressInfo).address).toBe('127.0.0.1')
+    // Negative assertions to nail down the contract — any of these would be malpractice-class.
+    expect((boundAddr as AddressInfo).address).not.toBe('0.0.0.0')
+    expect((boundAddr as AddressInfo).address).not.toBe('::')
+    expect((boundAddr as AddressInfo).address).not.toBe('::1')
   })
 })
