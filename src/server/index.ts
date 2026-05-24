@@ -26,8 +26,9 @@ import { seedDeadlineTypes } from './seed.js'
 
 export const app = new Hono<{ Variables: AppVariables }>()
 
-// SAFE-08: Only listed origins may receive responses
-app.use('*', cors({ origin: CORS_ORIGINS, credentials: false }))
+// SAFE-08: Only listed origins may receive responses.
+// Spread into a mutable array to satisfy Hono cors() type (readonly string[] → string[]).
+app.use('*', cors({ origin: [...CORS_ORIGINS], credentials: false }))
 
 // SAFE-10: Set req.user='local' on every request
 app.use('*', userContextMiddleware)
