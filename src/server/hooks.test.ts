@@ -32,10 +32,9 @@ describe('HOOK-02: Worker stub files exist with correct exports', () => {
     expect(typeof mod.startEmailWorker).toBe('function')
   })
 
-  it('startWallpaperWorker is a no-op (returns undefined, does not throw)', async () => {
+  it('startWallpaperWorker is a function (Phase 9: no longer a no-op)', async () => {
     const { startWallpaperWorker } = await import('./workers/wallpaper.js')
-    expect(() => startWallpaperWorker()).not.toThrow()
-    expect(startWallpaperWorker()).toBeUndefined()
+    expect(typeof startWallpaperWorker).toBe('function')
   })
 
   it('startEmailWorker is a no-op (returns undefined, does not throw)', async () => {
