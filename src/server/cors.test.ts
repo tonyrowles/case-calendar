@@ -99,3 +99,151 @@ describe('SAFE-08 (production): CORS allowlist locked to loopback-served origin'
     expect(prodOrigins).not.toContain('http://evil.example.com')
   })
 })
+
+// REMOTE-03: Test the TAILSCALE_HOSTNAME env var behavior in cors.ts.
+// Each block saves/restores both NODE_ENV and TAILSCALE_HOSTNAME, calls vi.resetModules()
+// in beforeAll (to force module re-evaluation) and afterAll (to restore dev state).
+
+describe('REMOTE-03: CORS extends with TAILSCALE_HOSTNAME set', () => {
+  let prodOrigins: readonly string[]
+  let prevNodeEnv: string | undefined
+  let prevHostname: string | undefined
+
+  beforeAll(async () => {
+    prevNodeEnv = process.env.NODE_ENV
+    prevHostname = process.env.TAILSCALE_HOSTNAME
+    process.env.NODE_ENV = 'production'
+    process.env.TAILSCALE_HOSTNAME = 'lawyer-laptop.tail-scale.ts.net'
+
+    vi.resetModules()
+    const mod = await import('./cors.js')
+    prodOrigins = mod.CORS_ORIGINS
+  })
+
+  afterAll(async () => {
+    if (prevNodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = prevNodeEnv
+    if (prevHostname === undefined) delete process.env.TAILSCALE_HOSTNAME
+    else process.env.TAILSCALE_HOSTNAME = prevHostname
+    vi.resetModules()
+  })
+
+  it('includes http variant of TAILSCALE_HOSTNAME', () => {
+    expect(prodOrigins).toContain('http://lawyer-laptop.tail-scale.ts.net')
+  })
+
+  it('includes https variant of TAILSCALE_HOSTNAME', () => {
+    expect(prodOrigins).toContain('https://lawyer-laptop.tail-scale.ts.net')
+  })
+
+  it('still includes loopback origin', () => {
+    expect(prodOrigins).toContain('http://127.0.0.1:3747')
+  })
+
+  it('production allowlist contains exactly three origins', () => {
+    expect(prodOrigins).toHaveLength(3)
+  })
+})
+
+describe('REMOTE-03: CORS unchanged when TAILSCALE_HOSTNAME is empty string', () => {
+  let prodOrigins: readonly string[]
+  let prevNodeEnv: string | undefined
+  let prevHostname: string | undefined
+
+  beforeAll(async () => {
+    prevNodeEnv = process.env.NODE_ENV
+    prevHostname = process.env.TAILSCALE_HOSTNAME
+    process.env.NODE_ENV = 'production'
+    process.env.TAILSCALE_HOSTNAME = ''
+
+    vi.resetModules()
+    const mod = await import('./cors.js')
+    prodOrigins = mod.CORS_ORIGINS
+  })
+
+  afterAll(async () => {
+    if (prevNodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = prevNodeEnv
+    if (prevHostname === undefined) delete process.env.TAILSCALE_HOSTNAME
+    else process.env.TAILSCALE_HOSTNAME = prevHostname
+    vi.resetModules()
+  })
+
+  it('production allowlist contains exactly one origin (Phase 6 baseline)', () => {
+    expect(prodOrigins).toHaveLength(1)
+  })
+
+  it('production allowlist equals Phase 6 baseline', () => {
+    expect(prodOrigins).toEqual(['http://127.0.0.1:3747'])
+  })
+})
+
+describe('REMOTE-03: CORS unchanged when TAILSCALE_HOSTNAME is unset', () => {
+  let prodOrigins: readonly string[]
+  let prevNodeEnv: string | undefined
+  let prevHostname: string | undefined
+
+  beforeAll(async () => {
+    prevNodeEnv = process.env.NODE_ENV
+    prevHostname = process.env.TAILSCALE_HOSTNAME
+    process.env.NODE_ENV = 'production'
+    delete process.env.TAILSCALE_HOSTNAME
+
+    vi.resetModules()
+    const mod = await import('./cors.js')
+    prodOrigins = mod.CORS_ORIGINS
+  })
+
+  afterAll(async () => {
+    if (prevNodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = prevNodeEnv
+    if (prevHostname === undefined) delete process.env.TAILSCALE_HOSTNAME
+    else process.env.TAILSCALE_HOSTNAME = prevHostname
+    vi.resetModules()
+  })
+
+  it('production allowlist contains exactly one origin (Phase 6 baseline)', () => {
+    expect(prodOrigins).toHaveLength(1)
+  })
+
+  it('production allows http://127.0.0.1:3747', () => {
+    expect(prodOrigins).toContain('http://127.0.0.1:3747')
+  })
+})
+
+describe('REMOTE-03: dev mode ignores TAILSCALE_HOSTNAME', () => {
+  let devOrigins: readonly string[]
+  let prevNodeEnv: string | undefined
+  let prevHostname: string | undefined
+
+  beforeAll(async () => {
+    prevNodeEnv = process.env.NODE_ENV
+    prevHostname = process.env.TAILSCALE_HOSTNAME
+    process.env.NODE_ENV = 'development'
+    process.env.TAILSCALE_HOSTNAME = 'lawyer-laptop.tail-scale.ts.net'
+
+    vi.resetModules()
+    const mod = await import('./cors.js')
+    devOrigins = mod.CORS_ORIGINS
+  })
+
+  afterAll(async () => {
+    if (prevNodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = prevNodeEnv
+    if (prevHostname === undefined) delete process.env.TAILSCALE_HOSTNAME
+    else process.env.TAILSCALE_HOSTNAME = prevHostname
+    vi.resetModules()
+  })
+
+  it('dev origins do NOT contain http tailscale variant', () => {
+    expect(devOrigins).not.toContain('http://lawyer-laptop.tail-scale.ts.net')
+  })
+
+  it('dev origins do NOT contain https tailscale variant', () => {
+    expect(devOrigins).not.toContain('https://lawyer-laptop.tail-scale.ts.net')
+  })
+
+  it('dev origins contain the standard Vite dev server origin', () => {
+    expect(devOrigins).toContain('http://127.0.0.1:5173')
+  })
+})
