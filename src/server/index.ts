@@ -23,6 +23,7 @@ import { createErrorHandler } from './middleware/error-shape.js'
 import { CORS_ORIGINS, TAILSCALE_CORS_HOSTNAME } from './cors.js'
 // seedDeadlineTypes is created by Plan 01-03 — both plans are wave 2 siblings
 import { seedDeadlineTypes } from './seed.js'
+import { startWallpaperWorker } from './workers/wallpaper.js'
 
 export const app = new Hono<{ Variables: AppVariables }>()
 
@@ -104,6 +105,7 @@ if (process.env.VITEST !== 'true') {
           'cors: tailscale origins allowed (http + https)'
         )
       }
+      startWallpaperWorker()   // WALL-01/02/04/05: fire-and-forget; non-blocking
     }
   )
 }
