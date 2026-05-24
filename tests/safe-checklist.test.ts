@@ -1,32 +1,41 @@
 /**
- * SAFE checklist: catalog of SAFE-01..10 requirements.
+ * SAFE catalog: every SAFE-XX requirement maps to a proof artifact.
  *
- * Asserts that every SAFE-XX requirement in .planning/REQUIREMENTS.md has
- * verifiable coverage — either an existing test file on disk (asserted via
- * fs.existsSync) or a documented smoke-procedure tag in the catalog map.
- *
- * This ensures the SAFE checklist never silently loses a coverage row as
- * implementation evolves across Plans 02-04.
- *
- * Key assertions (when implemented by Plan 04):
- *   SAFE-07 → tests/safe-07-bind-loopback.test.ts must exist
- *   SAFE-09 → tests/safe-09-no-external-network.test.ts must exist
- *   SAFE-03 → tests/date-guard.test.ts must exist (already GREEN from Phase 1)
- *   SAFE-06 → tests/type-color-source.test.ts must exist (already GREEN from Phase 1)
- *   All other SAFE-XX rows must have either a test file or a 'smoke:' tag entry
- *
- * The catalog may be parsed from .planning/REQUIREMENTS.md or maintained as a
- * hand-curated map — Plan 04 will decide the implementation approach.
- *
- * Wave 0 (this file): RED stub — fails immediately with a MISSING message.
- * Wave 3 (Plan 04): Implements the real catalog parse + fs.existsSync assertions.
+ * Hand-maintained map — adding a new SAFE-XX requirement requires adding a row here.
+ * Per .planning/REQUIREMENTS.md, Phase 6 is the last SAFE-adding phase in v1.
+ * Phase 8+ (Tailscale) may introduce new SAFE rows — extend SAFE_PROOF_MAP at that time.
  */
 import { describe, it, expect } from 'vitest'
+import fs from 'node:fs'
 
-describe('SAFE checklist: every SAFE-01..10 requirement has a proof artifact (test file or documented smoke procedure)', () => {
-  it('every SAFE-XX row in REQUIREMENTS.md has either a corresponding test file or a smoke-procedure tag', () => {
-    expect.fail(
-      'MISSING — Plan 04 will parse SAFE-01..10 from .planning/REQUIREMENTS.md (or maintain a hand-curated map), and assert each SAFE-XX has either fs.existsSync(<test-file>) === true OR a \'smoke:\' tag in the map; SAFE-09 must reference tests/safe-09-no-external-network.test.ts; SAFE-07 must reference tests/safe-07-bind-loopback.test.ts'
-    )
+type ProofEntry = { description: string; proof: string; type: 'test' | 'smoke' }
+
+export const SAFE_PROOF_MAP: Record<string, ProofEntry> = {
+  'SAFE-01': { description: 'Date round-trip across US timezones (LA/Chicago/NY)', proof: 'src/server/tz.test.ts', type: 'test' },
+  'SAFE-02': { description: 'DST boundary correctness',                            proof: 'src/server/tz.test.ts', type: 'test' },
+  'SAFE-03': { description: 'No raw new Date(string) outside date util',           proof: 'tests/date-guard.test.ts', type: 'test' },
+  'SAFE-04': { description: 'SQLite PRAGMA on startup (WAL + foreign_keys)',       proof: 'src/server/db.test.ts', type: 'test' },
+  'SAFE-05': { description: 'VACUUM INTO backup + 30-day retention',               proof: 'src/server/backup.test.ts', type: 'test' },
+  'SAFE-06': { description: 'Persistent error banner on 500',                      proof: 'src/client/App.crud.test.tsx', type: 'test' },
+  'SAFE-07': { description: 'Hono binds 127.0.0.1 only',                          proof: 'tests/safe-07-bind-loopback.test.ts', type: 'test' },
+  'SAFE-08': { description: 'CORS explicit allowlist',                             proof: 'src/server/cors.test.ts', type: 'test' },
+  'SAFE-09': { description: 'No external network in src/client',                   proof: 'tests/safe-09-no-external-network.test.ts', type: 'test' },
+  'SAFE-10': { description: 'req.user middleware placeholder',                     proof: 'src/server/user-middleware.test.ts', type: 'test' },
+}
+
+describe('SAFE checklist: every SAFE-01..10 has a proof artifact', () => {
+  const ALL_IDS = Array.from({ length: 10 }, (_, i) => `SAFE-${String(i + 1).padStart(2, '0')}`)
+
+  it.each(ALL_IDS)('%s has a map entry', (id) => {
+    expect(SAFE_PROOF_MAP[id], `Missing SAFE_PROOF_MAP entry for ${id}`).toBeDefined()
+  })
+
+  it.each(ALL_IDS)('%s proof exists on disk (or is a documented smoke procedure)', (id) => {
+    const entry = SAFE_PROOF_MAP[id]
+    if (entry.type === 'test') {
+      expect(fs.existsSync(entry.proof), `Proof file missing for ${id}: ${entry.proof}`).toBe(true)
+    } else {
+      expect(entry.proof.length, `${id} smoke description must be non-empty`).toBeGreaterThan(0)
+    }
   })
 })
