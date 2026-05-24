@@ -75,7 +75,7 @@ if (isProduction) {
   // SPA fallback — cached index.html for any non-API, non-asset path
   app.notFound((c) => {
     const p = c.req.path
-    if (p.startsWith('/api/') || p.startsWith('/assets/')) {
+    if (p.startsWith('/api/') || p === '/api' || p.startsWith('/assets/')) {
       return c.json({ error: { code: 'not_found', message: 'Not found' } }, 404)
     }
     return c.html(INDEX_HTML!, 200, { 'Cache-Control': 'no-cache' })

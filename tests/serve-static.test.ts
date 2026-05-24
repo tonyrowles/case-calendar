@@ -75,4 +75,13 @@ describe('OPS-02: Hono serveStatic + SPA notFoundHandler in production mode', ()
     const ct = res.headers.get('content-type')?.toLowerCase() ?? ''
     expect(ct).toContain('application/json')
   })
+
+  it('returns JSON 404 for bare /api path (no trailing slash) — CR-03', async () => {
+    // '/api'.startsWith('/api/') is false — without the p === '/api' guard the
+    // notFound handler fell through to the SPA fallback, returning 200 HTML.
+    const res = await app.request('/api')
+    expect(res.status).toBe(404)
+    const ct = res.headers.get('content-type')?.toLowerCase() ?? ''
+    expect(ct).toContain('application/json')
+  })
 })
