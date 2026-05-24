@@ -267,6 +267,165 @@ To check or disable Tailscale Serve at any time: `tailscale serve status` to con
 
 ---
 
+## Desktop Wallpaper (Phase 9)
+
+Your Windows desktop wallpaper auto-regenerates from the deadline view every 30 minutes and within about 10 seconds of any deadline change. Screenshots are taken at 7680×2160 via Playwright headless Chromium and applied via the IDesktopWallpaper COM interface.
+
+### Overview
+
+The wallpaper pipeline is fully in-process inside the NSSM service:
+
+- A `node-cron` job fires every 30 minutes (`*/30 * * * *`) to take a fresh screenshot.
+- Any deadline create/update/delete/type-change triggers a trailing-edge 10-second debounce that takes a screenshot within ~10s of the last change.
+- Screenshots are written to `data/wallpaper-*.png` (gitignored per OPS-05; last 10 retained).
+- On Windows, the latest PNG is applied via `scripts/wallpaper-set.ps1` using `IDesktopWallpaper::SetWallpaper($null, $path)` — `$null` monitor ID means all monitors.
+- The worker fetches `http://127.0.0.1:3747/wallpaper?t=<unix-ms>` over loopback only (SAFE-07 preserved).
+
+---
+
+### Install Playwright Chromium
+
+This step is **not** run automatically by `npm install`. Run it once after cloning and after every `npx playwright install` command:
+
+```powershell
+npx playwright install chromium
+```
+
+If Playwright Chromium fails to launch (e.g. missing OS dependencies on a fresh Windows install), run:
+
+```powershell
+npx playwright install --with-deps chromium
+```
+
+---
+
+### NSSM Session 0 Fix
+
+**This is required for wallpaper apply to work.** Without it, the service runs as LocalSystem in Windows Session 0, and `IDesktopWallpaper::SetWallpaper` silently fails.
+
+**Why Session 0 blocks wallpaper apply:** Windows Vista+ isolates services in Session 0, a non-interactive session with no visible desktop. The interactive user runs in Session 1. `IDesktopWallpaper` changes the wallpaper for the calling process's session — when called from Session 0, it either returns an HRESULT error or changes a wallpaper the user never sees. The "Allow service to interact with desktop" checkbox was removed in Windows 10 1803+.
+
+**Recommended install command (run as Administrator):**
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\nssm-install.ps1 -LogonUser '.\<your-username>'
+```
+
+The script will prompt for your Windows password. The password is stored encrypted by NSSM via Windows DPAPI (not in plaintext).
+
+**Verify the service account was set:**
+
+```powershell
+Get-WmiObject Win32_Service -Filter "Name='CaseCalendar'" | Select-Object StartName
+```
+
+Expected output: `.\<your-username>` (NOT `LocalSystem`).
+
+**Symptom table:**
+
+| Symptom | Root Cause | Fix |
+|---------|------------|-----|
+| Wallpaper never changes despite cron ticks in logs | Service running as LocalSystem in Session 0 | Re-run `nssm-install.ps1 -LogonUser '.\<username>'` |
+| PS1 exits with HRESULT 0x80070005 (E_ACCESSDENIED) | Session 0 IDesktopWallpaper access denied | Same fix as above |
+
+See the Task Scheduler alternative below if you prefer not to store your password in the NSSM service config.
+
+---
+
+### Task Scheduler Alternative (no stored password)
+
+If you do not want NSSM to hold your Windows password, keep NSSM running as LocalSystem. The worker still generates the PNG in `data/`. Use a Windows Task Scheduler entry to apply it under your user account at logon.
+
+**Trade-off:** The Task Scheduler path adds a second process; the NSSM ObjectName path is simpler and recommended. The Task Scheduler path requires a small wrapper script you write yourself (see below).
+
+**How it works:**
+
+1. Keep NSSM as LocalSystem (no `-LogonUser` needed — the worker generates PNGs but apply is skipped).
+2. Create a Task Scheduler entry:
+   - **Trigger:** At log on of `<your user>`
+   - **Action:** `pwsh -NoProfile -WindowStyle Hidden -File C:\apps\case-calendar\scripts\wallpaper-watch.ps1`
+3. The wrapper script (`wallpaper-watch.ps1`) polls `data\wallpaper-*.png` for the newest file every 30 seconds and calls `scripts\wallpaper-set.ps1 -Path <newest>`.
+
+> **Note:** `wallpaper-watch.ps1` is a DIY script not shipped in this repo. The NSSM ObjectName path (`-LogonUser`) is the supported, recommended deployment for wallpaper apply.
+
+---
+
+### DPI Scaling
+
+For the sharpest wallpaper text on the 57" Odyssey Neo G9 (7680×2160 native), set Windows display scaling to **100%**.
+
+- At **100% scaling**: 1 logical pixel = 1 physical pixel. Playwright's `deviceScaleFactor: 1` matches Windows exactly. Text renders at full native resolution with no resampling.
+- At **125% scaling**: Windows considers the logical desktop to be 6144×1728 (7680÷1.25). It downsamples the 7680×2160 PNG to fill the logical desktop — no distortion, no black bars, edge-to-edge display. However, text appears approximately 20% smaller relative to screen height.
+
+This is a cosmetic preference, not a correctness issue. The PNG will display edge-to-edge at either setting. If you prefer larger text at 125% scaling, increase the CSS font sizes in `src/client/routes/wallpaper.tsx` by ~25%.
+
+---
+
+### File Retention
+
+- PNGs are written to `data/wallpaper-{ISO-timestamp}.png` where timestamp is `YYYY-MM-DDTHH-mm-ssZ` (Windows-safe: colons replaced with hyphens for NTFS compatibility).
+- The last **10** files are retained; older PNGs are pruned after each screenshot run.
+- The `data/` directory is gitignored (per OPS-05) — PNGs never enter version control.
+- Approximate size: 3–8 MB per PNG → maximum ~80 MB on disk.
+
+---
+
+### Manual Debug: wallpaper:once
+
+Use this to verify the full pipeline (screenshot + prune + apply) without waiting for the cron schedule:
+
+```powershell
+npm run wallpaper:once
+```
+
+**Requirement:** The Hono server must be running (via NSSM or `npm run dev:server`) on `127.0.0.1:3747` — the worker fetches the `/wallpaper` route over loopback.
+
+**What it does:** Launches Playwright, takes one screenshot at 7680×2160, prunes old files (keeps newest 10), applies the PNG on Windows via `wallpaper-set.ps1`, then exits.
+
+---
+
+### Resource Usage
+
+| Resource | Expected Usage |
+|----------|---------------|
+| Playwright Chromium | ~50 MB resident in the node process tree (persistent browser) |
+| PowerShell (wallpaper apply) | Short-lived (<1 second per apply), ~30 MB peak |
+| Disk | Up to ~80 MB for 10 retained PNGs (3–8 MB each) |
+| CPU (cron schedule only) | Negligible — fires every 30 minutes |
+
+---
+
+### Troubleshooting
+
+#### PNGs appear in `data/` but Win+D shows the old wallpaper
+
+**Cause:** Service running as LocalSystem (Session 0) — `IDesktopWallpaper` silently no-ops.
+
+**Fix:** Re-run `nssm-install.ps1` with `-LogonUser '.\<username>'` (see NSSM Session 0 Fix above), or set up the Task Scheduler alternative.
+
+#### Worker log shows `wallpaper: browser launch failed at startup`
+
+**Cause:** Playwright Chromium binary not installed.
+
+**Fix:**
+
+```powershell
+npx playwright install --with-deps chromium
+```
+
+#### Worker log shows `wallpaper: screenshot failed` with `TimeoutError: navigation`
+
+**Cause:** Hono server not yet listening on port 3747 when the worker attempted to fetch `/wallpaper` (race during NSSM service restart).
+
+**Fix:** Self-corrects on the next cron tick (within 30 minutes) or on the next deadline mutation. If the error persists:
+
+```powershell
+nssm status CaseCalendar
+netstat -ano | findstr 3747
+```
+
+---
+
 ## SAFE Checklist Summary
 
 Every SAFE requirement has an automated proof test. Run `cross-env TZ=America/Los_Angeles npm test` to confirm all pass.
