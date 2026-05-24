@@ -84,4 +84,15 @@ describe('OPS-02: Hono serveStatic + SPA notFoundHandler in production mode', ()
     const ct = res.headers.get('content-type')?.toLowerCase() ?? ''
     expect(ct).toContain('application/json')
   })
+
+  it('production CORS rejects Origin: http://localhost:3747 (not in production allowlist) — WR-02', async () => {
+    // Dev/prod CORS asymmetry: in dev, localhost:3747 is allowed; in production
+    // only 127.0.0.1:3747 is in PROD_ORIGINS. A request with Origin: localhost:3747
+    // in production must receive no Access-Control-Allow-Origin header, which is
+    // what this test documents and locks in. See cors.ts for full explanation.
+    const res = await app.request('/api/deadlines', {
+      headers: { Origin: 'http://localhost:3747' },
+    })
+    expect(res.headers.get('access-control-allow-origin')).toBeNull()
+  })
 })
