@@ -120,7 +120,13 @@ async function pruneOldWallpapers(): Promise<void> {
   withMtime.sort((a, b) => b.mtime - a.mtime)
 
   const toDelete = withMtime.slice(KEEP_COUNT)
-  await Promise.all(toDelete.map(({ file }) => unlink(path.join(DATA_DIR, file))))
+  await Promise.all(
+    toDelete.map(({ file }) =>
+      unlink(path.join(DATA_DIR, file)).catch((err) =>
+        logger.warn({ err, file }, 'wallpaper: failed to prune old PNG — skipping')
+      )
+    )
+  )
 
   if (toDelete.length > 0) {
     logger.info({ kept: KEEP_COUNT, removed: toDelete.length }, 'wallpaper: pruned old PNGs')
