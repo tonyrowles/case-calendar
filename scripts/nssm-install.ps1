@@ -56,7 +56,17 @@ if (-not (Test-Path $serverJs)) {
 nssm status $ServiceName 2>$null | Out-Null
 if ($LASTEXITCODE -eq 0) {
   Write-Host "Stopping existing $ServiceName service..."
-  nssm stop $ServiceName 2>$null | Out-Null
+  nssm stop $ServiceName confirm 2>$null | Out-Null
+  # Poll until fully stopped (max 30 seconds) to avoid the SCM async-stop race
+  # where nssm remove is called while the service is still in SERVICE_STOP_PENDING,
+  # causing a silent failure that leaves the old service registered.
+  $waited = 0
+  while ($waited -lt 30) {
+    $status = (nssm status $ServiceName 2>$null)
+    if ($status -match 'SERVICE_STOPPED') { break }
+    Start-Sleep -Seconds 1
+    $waited++
+  }
   nssm remove $ServiceName confirm | Out-Null
 }
 
