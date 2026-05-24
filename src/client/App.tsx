@@ -118,9 +118,11 @@ export function App() {
 
   // KBD-01: 'n' — open new-deadline form; DeadlineForm's existing effect focuses caseLabel when
   // the deadline prop transitions from truthy → null.
+  // Also clears duplicateSource so 'n' always opens a blank form, not a prefilled one (WR-02).
   const onNewDeadline = useCallback(() => {
     setSelectedDeadlineId(null)
     setSelectedDeadlineIndex(null)
+    setDuplicateSource(null)
   }, [])
 
   // KBD-02: 'e' — edit selected; form is already in edit mode when selectedDeadline is non-null.
