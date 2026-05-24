@@ -153,12 +153,13 @@ export async function generateAndApplyWallpaper(): Promise<void> {
     const filename = `wallpaper-${buildTimestampFilename()}.png`
     const absolutePath = path.join(DATA_DIR, filename)
 
+    const wallpaperUrl = buildWallpaperUrl()
     logger.info(
-      { url: buildWallpaperUrl(), path: absolutePath },
+      { url: wallpaperUrl, path: absolutePath },
       'wallpaper: generating screenshot'
     )
 
-    await takeScreenshot(buildWallpaperUrl(), absolutePath)
+    await takeScreenshot(wallpaperUrl, absolutePath)
     await pruneOldWallpapers()
 
     if (process.platform === 'win32') {
