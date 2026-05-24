@@ -44,9 +44,9 @@ if (-not (Get-Command nssm -ErrorAction SilentlyContinue)) {
 # ---------------------------------------------------------------------------
 # Pre-flight check 3: build artifacts must exist (prevents NSSM restart loop)
 # ---------------------------------------------------------------------------
-$serverJs = Join-Path $InstallDir "dist\server\index.js"
+$serverJs = Join-Path $InstallDir "dist\server\src\server\index.js"
 if (-not (Test-Path $serverJs)) {
-  Write-Error "dist\server\index.js missing in '$InstallDir'. Run 'npm run build' first, then re-run this script."
+  Write-Error "dist\server\src\server\index.js missing in '$InstallDir'. Run 'npm run build' first, then re-run this script."
   exit 1
 }
 
