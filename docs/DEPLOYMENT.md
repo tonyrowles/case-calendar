@@ -433,6 +433,116 @@ netstat -ano | findstr 3747
 
 ---
 
+## Email Digest (Phase 10)
+
+A daily 7:00 AM email digest delivers the next 14 days of deadlines (plus overdue items capped at the 30 most recent) as a plain-text and HTML multipart email. The worker reads SMTP credentials from `.env.local` and only runs when `EMAIL_DIGEST_ENABLED=true`. If that variable is absent or set to anything other than `'true'`, the scheduler no-ops silently — preserving SAFE-09 by default. Use `npm run email:once` to trigger an immediate manual send for testing.
+
+### Overview
+
+- Daily 7:00 AM LA-time cron via `node-cron` (same scheduler as the wallpaper worker)
+- Digest scope: next 14 days of upcoming deadlines + overdue items capped at 30 most recent
+- Format: plain-text + HTML multipart — renders cleanly in Outlook, Apple Mail, and terminal mail readers
+- SMTP credentials come from `.env.local` (gitignored) — never committed to the repo
+- `EMAIL_DIGEST_ENABLED=true` is the opt-in gate; the worker no-ops when absent (SAFE-09 preserved)
+- `npm run email:once` sends a single digest immediately without scheduling the cron
+
+### Configure SMTP
+
+1. Copy `.env.example` to `.env.local` at the project root.
+2. Fill in all seven variables (see table below).
+3. Restart the NSSM service: `nssm restart CaseCalendar`
+
+**Environment variables:**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SMTP_HOST` | Yes | SMTP server hostname (e.g. `smtp.gmail.com`) |
+| `SMTP_PORT` | Yes | SMTP port: `587` for STARTTLS (recommended) or `465` for SMTPS |
+| `SMTP_USER` | Yes | SMTP account username (usually your email address) |
+| `SMTP_PASS` | Yes | SMTP password — for Gmail, use an App Password (16 chars, 4 groups of 4) |
+| `SMTP_FROM` | Yes | Display From header (e.g. `Case Calendar <you@gmail.com>`) |
+| `SMTP_TO` | Yes | Recipient email address (the lawyer's inbox) |
+| `EMAIL_DIGEST_ENABLED` | Yes | Set to `true` to enable the daily 7am cron (default: no-op) |
+
+**TLS port selection:**
+
+| Port | Mode | Config | Notes |
+|------|------|--------|-------|
+| `587` | STARTTLS | `secure: false` + `requireTLS: true` | Gmail default; upgrades plain connection to TLS |
+| `465` | SMTPS | `secure: true` | TLS from the first byte; some providers prefer this |
+
+The worker selects the correct TLS mode automatically based on `SMTP_PORT`.
+
+### Gmail Setup (App Password)
+
+> **"Less Secure Apps" was removed by Google in September 2024.** Do not follow any tutorial that instructs you to enable it — that option no longer exists. App Passwords are the only supported path for SMTP with Gmail.
+
+1. Enable **2-Step Verification** on your Google account (required before App Passwords become available).
+2. Go to [https://accounts.google.com/security](https://accounts.google.com/security) → **2-Step Verification** → **App passwords** (at the bottom of the page).
+3. Select **"Mail"** and **"Other (Custom name)"**, enter `Case Calendar`, then click **Generate**.
+4. Copy the 16-character password (shown as four groups of four characters, e.g. `abcd efgh ijkl mnop`).
+5. Paste it into `SMTP_PASS` in your `.env.local` (with or without spaces — Nodemailer accepts both).
+6. Set `SMTP_HOST=smtp.gmail.com` and `SMTP_PORT=587`.
+
+**Other SMTP providers:** SendGrid, Postmark, Mailgun, AWS SES, and self-hosted Postfix all work the same way — use the host, port, username, and API key/password from your provider's SMTP credential page.
+
+### Windows File Permissions for .env.local
+
+`.env.local` contains real SMTP credentials and should be readable only by your Windows user account:
+
+1. Right-click `.env.local` → **Properties** → **Security** tab.
+2. Click **Edit**, remove the `Users` group, keep only your own user account with **Read** permission.
+3. Click **OK** / **Apply**.
+
+The NSSM service must run as the same user to read the file (configured via `-LogonUser` in Phase 9). If the service runs as `LocalSystem`:
+- Either re-run `nssm-install.ps1 -LogonUser '.\<your-username>'` (recommended — same step as Phase 9 wallpaper setup).
+- Or grant `LocalSystem` read access to `.env.local` (less secure — LocalSystem is a highly-privileged account).
+
+### Manual Debug: email:once
+
+Use this to verify SMTP credentials and email delivery without waiting for the daily 7am cron:
+
+```powershell
+npm run email:once
+```
+
+**Requirements:**
+- `.env.local` must exist at the project root with all seven variables set.
+- `EMAIL_DIGEST_ENABLED=true` must be present.
+- SMTP server must be reachable. Test connectivity first:
+  ```powershell
+  Test-NetConnection smtp.gmail.com -Port 587
+  ```
+
+**Behavior:** Loads `.env.local`, validates all required vars, builds the digest HTML + plain-text, sends one email to `SMTP_TO`, then exits with code `0` on success or `1` on failure. The `--once` flag does NOT schedule the daily cron — it is a one-shot manual trigger only.
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Log: `email digest disabled (set EMAIL_DIGEST_ENABLED=true)` | `.env.local` does not exist or `EMAIL_DIGEST_ENABLED` is not set | Create `.env.local` from `.env.example` and set `EMAIL_DIGEST_ENABLED=true` |
+| Log: `email digest disabled (missing env vars: ...)` with a list | One or more required vars missing or misspelled | Check `.env.local` against `.env.example`; verify variable names match exactly |
+| Log: `email: SMTP verify failed` with `EAUTH` or `ENOAUTH` | Wrong SMTP credentials | Regenerate the Gmail App Password and update `SMTP_PASS` in `.env.local` |
+| Log: `email: SMTP verify failed` with `ECONNREFUSED` | Wrong host/port or firewall blocking | Run `Test-NetConnection $SMTP_HOST -Port $SMTP_PORT` to verify connectivity; check Windows Firewall rules |
+| Log: `email: SMTP verify failed` with `ESOCKET` or `ETIMEDOUT` | SMTP server slow or unreachable | Retry; if persistent, contact your SMTP provider |
+| `npm run email:once` exits 1 with `ENOENT .env.local` | Not running from the project root | `cd C:\apps\case-calendar` then re-run |
+| Email never arrives, no errors in logs | Wrong `SMTP_TO` address, or provider spam-filtered the message | Check spam/junk folder; check provider outbound send log |
+| Two emails arrive at 7am | `noOverlap` disabled or duplicate NSSM service registered | Verify only one `CaseCalendar` service exists: `nssm status CaseCalendar` |
+
+**After any change to `.env.local`, restart the NSSM service:**
+
+```powershell
+nssm restart CaseCalendar
+```
+
+### Resource Usage
+
+- ~5 MB resident for the Nodemailer SMTP transport (held in the Node process)
+- No disk attachments — HTML + plain-text inline only
+- One SMTP connection per day at 7:00 AM LA-time; connection closed immediately after send
+
+---
+
 ## SAFE Checklist Summary
 
 Every SAFE requirement has an automated proof test. Run `cross-env TZ=America/Los_Angeles npm test` to confirm all pass.

@@ -40,6 +40,14 @@ See [docs/DEPLOYMENT.md — Desktop Wallpaper](./docs/DEPLOYMENT.md#desktop-wall
 
 ---
 
+## Email Digest
+
+A daily 7:00 AM email digest delivers the next 14 days of deadlines plus overdue items (capped at 30 most recent) as a plain-text and HTML multipart message that renders cleanly in Outlook, Apple Mail, and terminal mail readers.
+
+See [docs/DEPLOYMENT.md -- Email Digest](./docs/DEPLOYMENT.md#email-digest-phase-10) for setup: copy `.env.example` to `.env.local`, configure SMTP (Gmail App Password walkthrough included), and trigger a test send with `npm run email:once`.
+
+---
+
 ## SAFE Checklist
 
 Every safety requirement has an automated proof test. Run `cross-env TZ=America/Los_Angeles npm test` to confirm all pass.
