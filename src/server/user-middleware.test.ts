@@ -56,4 +56,15 @@ describe('REMOTE-04: user context middleware — Tailscale identity', () => {
     const body = await res.json() as { user: string }
     expect(body.user).toBe('local')
   })
+
+  it('whitespace-only Tailscale-User-Login header → c.get("user") falls back to "local"', async () => {
+    const app = new Hono<{ Variables: AppVariables }>()
+    app.use('*', userContextMiddleware)
+    app.get('/', (c) => c.json({ user: c.get('user') }))
+
+    const res = await app.request('/', { headers: { 'Tailscale-User-Login': '   ' } })
+    expect(res.status).toBe(200)
+    const body = await res.json() as { user: string }
+    expect(body.user).toBe('local')
+  })
 })
