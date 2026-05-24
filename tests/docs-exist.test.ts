@@ -46,7 +46,7 @@ const DOCS: DocSpec[] = [
       'NODE_ENV=production',
       'nssm remove',
       'Pacific Standard Time',
-      'dist\\server\\index.js',
+      'dist\\server\\src\\server\\index.js',
     ],
   },
 ]
