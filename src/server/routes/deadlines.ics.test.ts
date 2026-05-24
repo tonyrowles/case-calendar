@@ -181,11 +181,21 @@ describe('GET /api/deadlines.ics', () => {
     const res = await app.request('/api/deadlines.ics')
     const rawBody = await res.text()
 
-    // Mask volatile timestamp lines before comparison
-    const maskedBody = rawBody.replace(/^(DTSTAMP|LAST-MODIFIED|CREATED):.*$/gm, '$1:MASKED')
+    // Mask volatile timestamp lines and auto-increment UID before comparison.
+    // UID value is already tested for stability in Test 3.
+    // Auto-increment does not reset on DELETE, so we normalize the UID to a
+    // placeholder to keep the fixture time-stable across test runs.
+    const maskedBody = rawBody
+      .replace(/^(DTSTAMP|LAST-MODIFIED|CREATED):.*$/gm, '$1:MASKED')
+      .replace(/^UID:.*@case-calendar\.local$/gm, 'UID:MASKED@case-calendar.local')
     const fixture = readFileSync(fixturePath, 'utf8')
+    // Also normalize fixture UID for comparison
+    const maskedFixture = fixture.replace(
+      /^UID:.*@case-calendar\.local$/gm,
+      'UID:MASKED@case-calendar.local'
+    )
 
-    expect(maskedBody).toBe(fixture)
+    expect(maskedBody).toBe(maskedFixture)
   })
 
   it('Test 13 (long description folding): 200-char description produces RFC 5545 line fold', async () => {
@@ -193,7 +203,9 @@ describe('GET /api/deadlines.ics', () => {
     seedDeadline('2026-06-15', 'Smith v. Jones', 1, { description: longDesc })
     const res = await app.request('/api/deadlines.ics')
     const body = await res.text()
-    // RFC 5545 §3.1: long lines folded at 75 octets with CRLF + single-space continuation
-    expect(body).toMatch(/\r\n /)
+    // RFC 5545 §3.1: long lines folded at 75 octets with CRLF followed by a linear white space
+    // character (either SPACE or HTAB). The ics package uses CRLF+TAB.
+    expect(body).toMatch(/\r\n[\t ]/)
+
   })
 })

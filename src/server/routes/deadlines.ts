@@ -4,6 +4,7 @@ import { deadlineCreateSchema, deadlineUpdateSchema } from '../../shared/schemas
 import { createDeadline, getAllDeadlines, updateDeadline, deleteDeadline } from '../queries.js'
 import { type AppVariables } from '../middleware/user-context.js'
 import { logger } from '../logger.js'
+import { registerIcsRoute } from './deadlines.ics.js'
 
 export const deadlinesRouter = new Hono<{ Variables: AppVariables }>()
 
@@ -89,3 +90,7 @@ deadlinesRouter.delete('/deadlines/:id', (c) => {
     return c.json({ error: { code: 'db_error', message: "Couldn't delete deadline." } }, 500)
   }
 })
+
+// Mount the iCal feed handler LAST — after all :id-parameterized routes
+// to document intent (literal path /deadlines.ics is distinct from /deadlines/:id in Hono)
+registerIcsRoute(deadlinesRouter)
