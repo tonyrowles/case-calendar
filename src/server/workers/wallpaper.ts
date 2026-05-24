@@ -8,6 +8,7 @@
  * Plan 03 wires the PowerShell apply callback via setApplyWallpaper().
  */
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { readdir, stat, unlink } from 'node:fs/promises'
 import cron, { type ScheduledTask } from 'node-cron'
 import { chromium, type Browser, type BrowserContext } from 'playwright'
@@ -189,6 +190,11 @@ export function triggerDebouncedScreenshot(): void {
 // --- Entry point: start the background worker ---
 
 export function startWallpaperWorker(): void {
+  // Wire apply impl unconditionally — needed in both --once and normal paths.
+  // Not gated by platform — generateAndApplyWallpaper guards process.platform === 'win32'
+  // before calling applyWallpaperImpl, so spawnPowerShellApply is set unconditionally.
+  setApplyWallpaper(spawnPowerShellApply)
+
   // --once mode: fire one screenshot and exit (server must be running on 3747)
   if (process.argv.includes('--once')) {
     ;(async () => {
@@ -204,12 +210,6 @@ export function startWallpaperWorker(): void {
   launchBrowser().catch((err) =>
     logger.error({ err }, 'wallpaper: browser launch failed at startup')
   )
-
-  // Wire Plan 03's PowerShell apply implementation (Plan 03: WALL-03).
-  // Must run before the first cron tick or mutation can fire.
-  // Not gated by platform — generateAndApplyWallpaper guards process.platform === 'win32'
-  // before calling applyWallpaperImpl, so spawnPowerShellApply is set unconditionally.
-  setApplyWallpaper(spawnPowerShellApply)
 
   // Register 30-minute cron task (WALL-04)
   cronTask = cron.schedule(
@@ -247,6 +247,16 @@ export function startWallpaperWorker(): void {
     { schedule: CRON_EXPR, debounceMs: DEBOUNCE_MS, dpr: 1, viewport: '7680x2160' },
     'wallpaper worker started'
   )
+}
+
+// --- Module entry-point guard (for `npm run wallpaper:once` via tsx) ---
+
+// When wallpaper.ts is run directly (tsx src/server/workers/wallpaper.ts --once),
+// import.meta.url resolves to this file's path which matches process.argv[1].
+// Without this guard, tsx exits immediately after evaluating the module without
+// ever calling startWallpaperWorker(), so --once would do nothing.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  startWallpaperWorker()
 }
 
 // --- Test reset helper (VITEST only) ---
