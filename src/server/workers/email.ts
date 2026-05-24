@@ -146,7 +146,26 @@ export async function startEmailWorker(): Promise<void> {
   // dotenv does NOT override vars already set in the OS environment (NSSM sets TZ etc.)
   dotenv.config({ path: '.env.local' })
 
-  // 2. Graceful no-op when not configured (EMAIL-02: env-only config)
+  // 2. --once mode: manual debug/test trigger — bypasses EMAIL_DIGEST_ENABLED gate.
+  // Matches wallpaper.ts pattern: manual trigger checks required vars then sends immediately.
+  // EMAIL_DIGEST_ENABLED is meaningful only for suppressing the daily cron, not ad-hoc sends.
+  if (process.argv.includes('--once')) {
+    const missing = REQUIRED_ENV.filter((k) => !process.env[k])
+    if (missing.length > 0) {
+      logger.error({ missing }, 'email digest --once: missing required env vars')
+      process.exit(1)
+    }
+    await buildAndWireTransporter()
+    try {
+      await sendDigest()
+      process.exit(0)
+    } catch (err) {
+      logger.error({ err }, 'email digest --once failed')
+      process.exit(1)
+    }
+  }
+
+  // 3. Graceful no-op when not configured (EMAIL-02: env-only config)
   if (process.env.EMAIL_DIGEST_ENABLED !== 'true') {
     logger.info('email digest disabled (set EMAIL_DIGEST_ENABLED=true in .env.local)')
     return
@@ -156,19 +175,6 @@ export async function startEmailWorker(): Promise<void> {
   if (missing.length > 0) {
     logger.info({ missing }, 'email digest disabled (missing env vars)')
     return
-  }
-
-  // 3. --once mode: build transporter, send one digest, exit
-  // Called before verify() so direct invoke works even if verify() would fail
-  if (process.argv.includes('--once')) {
-    await buildAndWireTransporter()
-    try {
-      await sendDigest()
-      process.exit(0)
-    } catch (err) {
-      logger.error({ err }, 'email digest --once failed')
-      process.exit(1)
-    }
   }
 
   // 4. Normal startup: build transporter and wire DI seam
