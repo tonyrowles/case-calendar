@@ -139,3 +139,34 @@ export async function deleteDeadlineType(id: number): Promise<void> {
     throw new ApiError(message, code)
   }
 }
+
+/**
+ * The structured result returned by POST /api/deadlines/parse (NL-02).
+ * Matches the server response shape defined in Plan 02.
+ */
+export interface ParsedDeadlineResult {
+  caseLabel: string
+  typeId: number
+  date: string
+  description: string | null
+}
+
+/**
+ * POST /api/deadlines/parse — parse free-text into a structured deadline (NL-02).
+ * Returns the parsed shape on 200; throws ApiError with `code` on 4xx/5xx so
+ * CommandPaletteShell can branch on err.code === 'parser_unconfigured' / 'parser_timeout' / 'parse_failed'.
+ */
+export async function parseDeadline(text: string): Promise<ParsedDeadlineResult> {
+  const res = await fetch('/api/deadlines/parse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    const code = body?.error?.code ?? 'unknown'
+    const message = body?.error?.message ?? 'Parser unreachable. Try again.'
+    throw new ApiError(message, code)
+  }
+  return res.json()
+}
