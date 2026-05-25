@@ -5,7 +5,7 @@
 # Canonical invocation (run as Administrator):
 #   pwsh -ExecutionPolicy Bypass -File .\scripts\nssm-install.ps1
 #
-# Re-running is safe — idempotent: stops and removes the prior service before
+# Re-running is safe -- idempotent: stops and removes the prior service before
 # installing fresh. All NSSM settings are re-applied from this script on each run.
 #
 # Parameters:
@@ -15,7 +15,7 @@
 param(
   [string]$ServiceName = "CaseCalendar",
   [string]$InstallDir = (Resolve-Path "$PSScriptRoot\..").Path,
-  [string]$LogonUser = "",          # e.g. ".\yourusername" — required for wallpaper apply (Phase 9 Session 0 fix)
+  [string]$LogonUser = "",          # e.g. ".\yourusername" -- required for wallpaper apply (Phase 9 Session 0 fix)
   [string]$LogonPassword = ""       # stored encrypted by NSSM via Windows DPAPI; omit to be prompted at install
 )
 
@@ -105,7 +105,7 @@ if ($LogonUser -ne "") {
     [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) | Out-Null
   }
   nssm set $ServiceName ObjectName $LogonUser $LogonPassword
-  Write-Host "Service account set to: $LogonUser (Session 1+ — wallpaper apply enabled)"
+  Write-Host "Service account set to: $LogonUser (Session 1+ -- wallpaper apply enabled)"
 } else {
   Write-Warning "No -LogonUser provided. Service will run as LocalSystem (Session 0)."
   Write-Warning "Phase 9 wallpaper apply will silently fail until you re-run with -LogonUser '.\<username>'."
@@ -113,7 +113,7 @@ if ($LogonUser -ne "") {
 }
 
 # ---------------------------------------------------------------------------
-# Instructions — do NOT auto-start; let the operator verify first
+# Instructions -- do NOT auto-start; let the operator verify first
 # ---------------------------------------------------------------------------
 Write-Host ""
 Write-Host "$ServiceName installed but NOT started."
