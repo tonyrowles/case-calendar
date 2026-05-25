@@ -51,6 +51,7 @@ beforeAll(() => {
 
 afterEach(() => {
   cleanup()
+  vi.clearAllMocks()
   vi.restoreAllMocks()
 })
 
