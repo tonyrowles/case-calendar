@@ -28,10 +28,14 @@ export function buildPowerShellArgs(absolutePngPath: string): string[] {
  * In production, this is the built-in child_process.spawn.
  */
 export type SpawnFn = (cmd: string, args: string[], opts?: SpawnOptions) => ChildProcess
-let spawnImpl: SpawnFn = spawn
+// Node's spawn() is overloaded; cast to the narrow 3-arg form we actually use here.
+// All real invocations go through buildPowerShellArgs() + the spawnImpl(cmd, args, opts)
+// call at line ~46, so this cast is safe — the overload we use is satisfied.
+const realSpawn = spawn as unknown as SpawnFn
+let spawnImpl: SpawnFn = realSpawn
 
 export function __setSpawnForTests(fn: SpawnFn): void { spawnImpl = fn }
-export function __resetSpawnForTests(): void { spawnImpl = spawn }
+export function __resetSpawnForTests(): void { spawnImpl = realSpawn }
 
 /**
  * Spawn powershell.exe to apply the wallpaper. Resolves on exit code 0;
