@@ -1,6 +1,7 @@
 # scripts/setup.ps1
 #
 # One-shot install + setup for Case Calendar v1.0 on Windows.
+# Compatible with Windows PowerShell 5.1 (built-in on Windows 10/11) and PowerShell 7+.
 #
 # What this does:
 #   1. Pre-flight checks (Node 22+, npm, git; warn on missing optional deps)
@@ -15,20 +16,22 @@
 #   9. Post-install verification (service status, /api/identity probe)
 #
 # Canonical invocation (run as Administrator for NSSM steps):
-#   pwsh -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+#   powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+#
+# Or in an already-open PowerShell session (Set-ExecutionPolicy Bypass -Scope Process):
+#   .\scripts\setup.ps1
 #
 # Flags:
-#   -SkipTests           Skip `npm test` (faster reinstall when tests already known-green)
-#   -SkipPlaywright      Skip `npx playwright install chromium` (~120MB download)
-#   -SkipService         Skip NSSM service install (leave existing service or run via `npm run start`)
+#   -SkipTests           Skip 'npm test'
+#   -SkipPlaywright      Skip 'npx playwright install chromium' (~120MB download)
+#   -SkipService         Skip NSSM service install (leave existing or run via 'npm run start')
 #   -SkipEnvBootstrap    Skip .env.local prompt (assume already configured)
 #   -SkipTailscale       Skip Tailscale Serve configuration
 #   -ServiceName <name>  NSSM service name (default: CaseCalendar)
-#   -LogonUser <user>    Pass through to nssm-install.ps1 (e.g. ".\yourusername")
-#   -Unattended          Suppress all interactive prompts; assume defaults; fail closed on missing required input
+#   -LogonUser <user>    Pre-supply the service user (e.g. ".\yourusername")
+#   -Unattended          Suppress all interactive prompts; assume defaults
 #
-# Idempotent: safe to re-run. Each step skips if its work is already done
-# (npm install only on package.json change, build only on source change, etc.).
+# Idempotent: safe to re-run. Each step skips if its work is already done.
 
 param(
   [switch]$SkipTests,
@@ -47,6 +50,10 @@ $ErrorActionPreference = "Stop"
 
 $ProjectRoot = (Resolve-Path "$PSScriptRoot\..").Path
 Set-Location $ProjectRoot
+
+# Detect which PowerShell to use for the nssm-install.ps1 sub-call.
+# Prefer pwsh (PS7+) if available, fall back to powershell (PS5.1 built-in).
+$PsExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
 
 function Write-Step($msg) {
   Write-Host ""
@@ -94,7 +101,7 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
 }
 Write-Ok "npm $(npm --version)"
 
-# git (needed for .env.local gitignore safety)
+# git (optional)
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
   Write-Warning "git not found in PATH. Recommended but not strictly required."
 }
@@ -104,7 +111,7 @@ $hasNssm = $null -ne (Get-Command nssm -ErrorAction SilentlyContinue)
 if ($hasNssm) {
   Write-Ok "NSSM found"
 } elseif (-not $SkipService) {
-  Write-Warning "NSSM not found. Service install will be skipped. Download from https://nssm.cc/download and re-run with -SkipService omitted to enable."
+  Write-Warning "NSSM not found. Service install will be skipped. Download from https://nssm.cc/download and add to PATH, then re-run."
   $SkipService = $true
 }
 
@@ -113,7 +120,7 @@ $hasTailscale = $null -ne (Get-Command tailscale -ErrorAction SilentlyContinue)
 if ($hasTailscale) {
   Write-Ok "Tailscale found"
 } elseif (-not $SkipTailscale) {
-  Write-Skip "Tailscale not found — skipping remote access setup. Install from https://tailscale.com/download/windows to enable phone/laptop reach."
+  Write-Skip "Tailscale not found. Install from https://tailscale.com/download/windows to enable phone/laptop reach."
   $SkipTailscale = $true
 }
 
@@ -122,7 +129,7 @@ $tz = [System.TimeZoneInfo]::Local.Id
 if ($tz -ne "Pacific Standard Time") {
   Write-Warning "System timezone is '$tz'; Case Calendar's date math assumes 'Pacific Standard Time'."
   if (-not (Confirm-Continue "Continue anyway?" $false)) {
-    Write-Host "Aborted. Change Windows timezone in Settings -> Time & language, then re-run."
+    Write-Host "Aborted. Change Windows timezone in Settings > Time & language, then re-run."
     exit 1
   }
 }
@@ -183,7 +190,7 @@ $envExample = Join-Path $ProjectRoot ".env.example"
 if (-not $SkipEnvBootstrap -and -not (Test-Path $envLocal)) {
   Write-Step ".env.local bootstrap"
   if (-not (Test-Path $envExample)) {
-    Write-Warning ".env.example missing — skipping bootstrap"
+    Write-Warning ".env.example missing -- skipping bootstrap"
   } elseif (Confirm-Continue "Create .env.local from .env.example with interactive prompts?") {
     Copy-Item $envExample $envLocal
     Write-Ok "Copied .env.example -> .env.local"
@@ -202,7 +209,7 @@ if (-not $SkipEnvBootstrap -and -not (Test-Path $envLocal)) {
             Write-Ok "TAILSCALE_HOSTNAME=$tsHostname written"
           }
         } catch {
-          Write-Warning "Couldn't auto-detect tailscale hostname; edit .env.local manually."
+          Write-Warning "Could not auto-detect tailscale hostname; edit .env.local manually."
         }
       }
     }
@@ -214,11 +221,11 @@ if (-not $SkipEnvBootstrap -and -not (Test-Path $envLocal)) {
       $smtpPort = Read-Host "  SMTP_PORT (default: 587)"
       if ($smtpPort -eq "") { $smtpPort = "587" }
       $smtpUser = Read-Host "  SMTP_USER (your gmail address)"
-      $smtpPassSecure = Read-Host "  SMTP_PASS (Gmail App Password — 16 chars, no spaces)" -AsSecureString
+      $smtpPassSecure = Read-Host "  SMTP_PASS (Gmail App Password, 16 chars no spaces)" -AsSecureString
       $smtpPassBSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($smtpPassSecure)
       $smtpPass = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($smtpPassBSTR)
       [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($smtpPassBSTR) | Out-Null
-      $smtpTo = Read-Host "  SMTP_TO (recipient — usually same as SMTP_USER)"
+      $smtpTo = Read-Host "  SMTP_TO (recipient, usually same as SMTP_USER)"
       if ($smtpTo -eq "") { $smtpTo = $smtpUser }
 
       $envContent = Get-Content $envLocal
@@ -258,7 +265,7 @@ if (-not $SkipEnvBootstrap -and -not (Test-Path $envLocal)) {
       Set-Acl -Path $envLocal -AclObject $acl
       Write-Ok ".env.local ACL: current user only"
     } catch {
-      Write-Warning "Could not tighten .env.local ACL — check Properties > Security manually."
+      Write-Warning "Could not tighten .env.local ACL -- check Properties > Security manually."
     }
   } else {
     Write-Skip ".env.local bootstrap"
@@ -305,10 +312,10 @@ if (-not $SkipService) {
     }
   }
 
-  $nssmArgs = @("-File", "$PSScriptRoot\nssm-install.ps1", "-ServiceName", $ServiceName)
+  $nssmArgs = @("-ExecutionPolicy", "Bypass", "-File", "$PSScriptRoot\nssm-install.ps1", "-ServiceName", $ServiceName)
   if ($LogonUser -ne "") { $nssmArgs += @("-LogonUser", $LogonUser) }
 
-  & pwsh -ExecutionPolicy Bypass @nssmArgs
+  & $PsExe @nssmArgs
   if ($LASTEXITCODE -ne 0) {
     Write-Error "NSSM install failed."
     exit 1
@@ -322,11 +329,11 @@ if (-not $SkipService) {
     if ($svcStatus -match 'SERVICE_RUNNING') {
       Write-Ok "Service running on http://127.0.0.1:3747"
     } else {
-      Write-Warning "Service status: $svcStatus — check logs at $ProjectRoot\logs\"
+      Write-Warning "Service status: $svcStatus -- check logs at $ProjectRoot\logs\"
     }
   }
 } else {
-  Write-Skip "NSSM service (per -SkipService — run via 'npm run start' instead)"
+  Write-Skip "NSSM service (per -SkipService; run via 'npm run start' instead)"
 }
 
 # ---------------------------------------------------------------------------
@@ -360,7 +367,7 @@ $listening = netstat -ano | Select-String '127\.0\.0\.1:3747.*LISTENING'
 if ($listening) {
   Write-Ok "Hono listening on 127.0.0.1:3747"
 } else {
-  Write-Warning "Nothing listening on 127.0.0.1:3747 yet — start the service or run 'npm run start'."
+  Write-Warning "Nothing listening on 127.0.0.1:3747 yet -- start the service or run 'npm run start'."
 }
 
 # /api/identity probe (only if service running)
@@ -380,8 +387,10 @@ Write-Host "============================================================" -Foreg
 Write-Host ""
 Write-Host " Open in browser:    http://127.0.0.1:3747"
 if (-not $SkipTailscale -and $hasTailscale) {
-  $tsName = (tailscale status --json 2>$null | ConvertFrom-Json).Self.DNSName.TrimEnd('.')
-  if ($tsName) { Write-Host " Remote (tailnet):   http://$tsName" }
+  try {
+    $tsName = (tailscale status --json 2>$null | ConvertFrom-Json).Self.DNSName.TrimEnd('.')
+    if ($tsName) { Write-Host " Remote (tailnet):   http://$tsName" }
+  } catch {}
 }
 Write-Host " Manual digest:      npm run email:once"
 Write-Host " Manual wallpaper:   npm run wallpaper:once"
