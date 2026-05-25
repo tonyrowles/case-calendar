@@ -48,6 +48,14 @@ See [docs/DEPLOYMENT.md -- Email Digest](./docs/DEPLOYMENT.md#email-digest-phase
 
 ---
 
+## NL Quick-Add
+
+Press Cmd+K (Ctrl+K on Windows) inside the app, type a deadline in plain English like "Smith deposition June 15", and the new-deadline form opens pre-filled — ready to review and save. Powered by Anthropic Claude. Optional: leave the API key unset and Cmd+K still opens without the parser.
+
+See [docs/DEPLOYMENT.md — NL Quick-Add](./docs/DEPLOYMENT.md#nl-quick-add-phase-11) for the setup runbook: get an Anthropic API key, add it to `.env.local`, restart the service, and start parsing.
+
+---
+
 ## SAFE Checklist
 
 Every safety requirement has an automated proof test. Run `cross-env TZ=America/Los_Angeles npm test` to confirm all pass.
