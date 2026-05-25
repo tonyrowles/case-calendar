@@ -30,7 +30,8 @@ export interface ParsedDeadline {
 }
 
 export type AnthropicCreateFn = (
-  params: Anthropic.MessageCreateParams
+  params: Anthropic.MessageCreateParams,
+  options?: { timeout?: number }
 ) => Promise<Anthropic.Message>
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,7 +119,8 @@ function buildRealImpl(): AnthropicCreateFn {
     apiKey: process.env.ANTHROPIC_API_KEY!,
     maxRetries: 0,  // T-11-01-RUNAWAY: disable SDK retry amplification (default=2)
   })
-  return (params) => client.messages.create(params, { timeout: 10_000 })
+  return (params, options) =>
+    client.messages.create(params, options) as Promise<Anthropic.Message>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
