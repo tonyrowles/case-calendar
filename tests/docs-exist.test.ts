@@ -25,6 +25,8 @@ const DOCS: DocSpec[] = [
       'docs/DEPLOYMENT.md#desktop-wallpaper-phase-9',
       '## Email Digest',
       'docs/DEPLOYMENT.md#email-digest-phase-10',
+      '## NL Quick-Add',
+      'docs/DEPLOYMENT.md#nl-quick-add-phase-11',
     ],
   },
   {
@@ -66,6 +68,11 @@ const DOCS: DocSpec[] = [
       'email:once',
       'App Password',
       'smtp.gmail.com',
+      '## NL Quick-Add (Phase 11)',
+      'ANTHROPIC_API_KEY',
+      'parse:once',
+      'console.anthropic.com',
+      'claude-sonnet-4-6',
     ],
   },
   {
@@ -86,11 +93,23 @@ const DOCS: DocSpec[] = [
     ],
   },
   {
+    path: '.planning/PROJECT.md',
+    anchors: [
+      '## Key Decisions',
+      'NL parser uses Anthropic Claude',
+      'ANTHROPIC_API_KEY',
+      'Accepted scope deviation',
+      'NL parsing exception (Phase 11)',
+    ],
+  },
+  {
     path: '.env.example',
     anchors: [
       'SMTP_HOST',
       'EMAIL_DIGEST_ENABLED',
       'DO NOT commit .env.local',
+      'ANTHROPIC_API_KEY',
+      'Phase 11: NL Quick-Add',
     ],
   },
   {
@@ -101,7 +120,7 @@ const DOCS: DocSpec[] = [
   },
 ]
 
-describe('OPS-03 + REMOTE-01/02 + WALL-03/07 + EMAIL-01/02: Phase 6 + Phase 8 + Phase 9 + Phase 10 documentation artifacts exist with required anchors', () => {
+describe('OPS-03 + REMOTE-01/02 + WALL-03/07 + EMAIL-01/02 + NL-02/04: Phase 6 + Phase 8 + Phase 9 + Phase 10 + Phase 11 documentation artifacts exist with required anchors', () => {
   for (const doc of DOCS) {
     describe(doc.path, () => {
       it('file exists', () => {
