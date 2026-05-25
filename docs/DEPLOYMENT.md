@@ -582,7 +582,7 @@ This prints the parsed JSON (caseLabel, typeId, date, description) to stdout. Us
 
 ### Cost Tracking
 
-The parse route logs token usage via pino structured logs (`inputTokens`, `outputTokens`) on every successful parse. For real-world cost monitoring, check the Anthropic console at https://console.anthropic.com/usage (filter by API key). Expect ~$0.001 per 100 parses based on the 50-character typical input; actual cost depends on prompt length and type-list size.
+The parse route logs token usage via pino structured logs (`inputTokens`, `outputTokens`) on every successful parse. For real-world cost monitoring, check the Anthropic console at https://console.anthropic.com/usage (filter by API key). Expect ~$0.00035 per 100 parses (≈ $0.35 per 100,000 parses) based on the 50-character typical input; actual cost depends on prompt length and type-list size.
 
 ### Privacy Note
 
