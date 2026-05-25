@@ -39,6 +39,10 @@ export function App() {
   // POLISH-04: duplicate source — when set, DeadlineForm receives prefillValues
   const [duplicateSource, setDuplicateSource] = useState<import('@/shared/schemas/deadline.js').Deadline | null>(null)
 
+  // Phase 11 NL-01/NL-03: nlSource — when set, DeadlineForm receives prefillValues from the NL parser.
+  // Mirrors duplicateSource pattern (POLISH-04); nlSource takes precedence in the merged prefillValues.
+  const [nlSource, setNlSource] = useState<import('./lib/api.js').ParsedDeadlineResult | null>(null)
+
   // Phase 5: imperative ref to CalendarView for 't' shortcut
   const calendarRef = useRef<CalendarViewHandle>(null)
 
@@ -118,11 +122,12 @@ export function App() {
 
   // KBD-01: 'n' — open new-deadline form; DeadlineForm's existing effect focuses caseLabel when
   // the deadline prop transitions from truthy → null.
-  // Also clears duplicateSource so 'n' always opens a blank form, not a prefilled one (WR-02).
+  // Also clears duplicateSource and nlSource so 'n' always opens a blank form (WR-02 + NL-01 mutual exclusion).
   const onNewDeadline = useCallback(() => {
     setSelectedDeadlineId(null)
     setSelectedDeadlineIndex(null)
     setDuplicateSource(null)
+    setNlSource(null)
   }, [])
 
   // KBD-02: 'e' — edit selected; form is already in edit mode when selectedDeadline is non-null.
@@ -245,22 +250,42 @@ export function App() {
     />
   )
 
-  // Memoize so the object reference is stable as long as duplicateSource hasn't changed.
-  // Without this, every App re-render (TanStack Query refetch, filter change, etc.) produces
-  // a new inline object, causing DeadlineForm's useEffect([prefillValues]) to re-fire and
-  // call setFocus('caseLabel'), stealing focus from whatever the user is typing (CR-02).
+  // Memoize so the object reference is stable across re-renders (TanStack refetch, filter change, etc.).
+  // Without this, DeadlineForm's useEffect([prefillValues]) re-fires on every App render, stealing
+  // focus from whatever the user is typing (CR-02). nlSource takes precedence over duplicateSource
+  // so both sources are mutually exclusive in the form (RESEARCH.md Pitfall 6).
   const prefillValues = useMemo(
-    () => duplicateSource ? {
-      date: duplicateSource.date,
-      caseLabel: duplicateSource.caseLabel,
-      typeId: duplicateSource.typeId,
-      description: duplicateSource.description ?? '',
-    } : undefined,
-    [duplicateSource]
+    () => {
+      if (nlSource) return {
+        date: nlSource.date,
+        caseLabel: nlSource.caseLabel,
+        typeId: nlSource.typeId,
+        description: nlSource.description ?? '',
+      }
+      if (duplicateSource) return {
+        date: duplicateSource.date,
+        caseLabel: duplicateSource.caseLabel,
+        typeId: duplicateSource.typeId,
+        description: duplicateSource.description ?? '',
+      }
+      return undefined
+    },
+    [nlSource, duplicateSource]
   )
 
   const formSlot = (
     <section className="rounded-lg border bg-card p-6 shadow-sm h-full overflow-auto">
+      {/* Phase 11 NL-03: amber "Review & save" banner — visible only when nlSource is active.
+          LLM output never auto-saves; user must review and click Save. */}
+      {nlSource && (
+        <div
+          className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          role="status"
+          aria-live="polite"
+        >
+          Review &amp; save — parsed values may need adjustment before saving.
+        </div>
+      )}
       <DeadlineForm
         selectedDate={selectedDate}
         deadline={selectedDeadline}
@@ -269,11 +294,13 @@ export function App() {
           setSelectedDeadlineId(null)
           setSelectedDeadlineIndex(null)
           setDuplicateSource(null)
+          setNlSource(null)
         }}
         onSuccess={() => {
           setSelectedDeadlineId(null)
           setSelectedDeadlineIndex(null)
           setDuplicateSource(null)
+          setNlSource(null)
         }}
       />
     </section>
@@ -303,7 +330,20 @@ export function App() {
 
         {/* Dialogs mount unconditionally — Radix portals content only when open */}
         <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
-        <CommandPaletteShell open={commandKOpen} onOpenChange={setCommandKOpen} />
+        <CommandPaletteShell
+          open={commandKOpen}
+          onOpenChange={setCommandKOpen}
+          onParsed={(parsed) => {
+            // NL takes precedence; clear duplicateSource so prefillValues sources are mutually
+            // exclusive (RESEARCH.md Pitfall 6). Also clear any selected deadline so the form
+            // returns to create mode rather than edit mode.
+            setDuplicateSource(null)
+            setNlSource(parsed)
+            setSelectedDeadlineId(null)
+            setSelectedDeadlineIndex(null)
+            // Palette closes itself via onOpenChange(false) inside CommandPaletteShell.onSuccess
+          }}
+        />
         <JumpToDateDialog
           open={jumpDialogOpen}
           onOpenChange={setJumpDialogOpen}
