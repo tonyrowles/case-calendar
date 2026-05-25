@@ -39,14 +39,6 @@ export function CommandPaletteShell(props: CommandPaletteShellProps): React.JSX.
   const [inputValue, setInputValue] = useState('')
   const [parseError, setParseError] = useState<string | null>(null)
 
-  // Reset on close so reopening after a close starts fresh
-  useEffect(() => {
-    if (!props.open) {
-      setInputValue('')
-      setParseError(null)
-    }
-  }, [props.open])
-
   const parseMutation = useMutation({
     mutationFn: (text: string) => parseDeadline(text),
     onSuccess: (result) => {
@@ -62,6 +54,21 @@ export function CommandPaletteShell(props: CommandPaletteShellProps): React.JSX.
       // inputValue is preserved so user can edit and retry.
     },
   })
+
+  // Reset on close so reopening after a close starts fresh.
+  // parseMutation.reset() prevents an in-flight parse from calling onParsed after
+  // the palette is dismissed (WR-02: ghost-parse scenario where user presses Esc
+  // before the response arrives — without reset(), onSuccess still fires and opens
+  // the form unexpectedly). Note: reset() stops the TanStack state machine but does
+  // not abort the underlying HTTP request; the server-side parse still completes.
+  useEffect(() => {
+    if (!props.open) {
+      setInputValue('')
+      setParseError(null)
+      parseMutation.reset()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.open])
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
