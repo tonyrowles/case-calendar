@@ -19,6 +19,7 @@
     "test:watch": "cross-env TZ=America/Los_Angeles vitest",
     "wallpaper:once": "cross-env TZ=America/Los_Angeles tsx src/server/workers/wallpaper.ts --once",
     "email:once": "cross-env TZ=America/Los_Angeles tsx src/server/workers/email.ts --once",
+    "parse:once": "cross-env TZ=America/Los_Angeles tsx src/server/scripts/parse-once.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },

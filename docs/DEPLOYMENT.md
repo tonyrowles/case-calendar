@@ -543,6 +543,66 @@ nssm restart CaseCalendar
 
 ---
 
+## NL Quick-Add (Phase 11)
+
+Press Cmd+K (Ctrl+K on Windows), type "Smith deposition June 15" or similar free-text, press Enter, and the new-deadline form opens prefilled with case, type, date, and description — ready to review and save. Powered by Anthropic Claude. **Optional** — Cmd+K still opens without the key set, but Enter shows "NL parser disabled."
+
+### Overview
+
+- **Provider:** Anthropic Claude (`claude-sonnet-4-6`) via `@anthropic-ai/sdk`
+- **Endpoint:** `POST /api/deadlines/parse` (server-side proxy; API key never leaves the host)
+- **Cost:** approximately $0.0000035 per parse (≈ $0.35 per 100,000 parses) — see Anthropic pricing
+- **Privacy:** Only the user-typed free text is sent. Stored deadlines, case labels, and the types table are NOT transmitted. NL parsing is the one deliberate exception to the local-only data policy (see .planning/PROJECT.md Key Decisions).
+- **Safety (NL-03):** Parsed values pre-fill the new-deadline form. The user MUST click Save to confirm — the LLM result is never auto-saved (malpractice risk: LLM date hallucinations).
+
+### Configure ANTHROPIC_API_KEY
+
+1. Get an API key from https://console.anthropic.com → Settings → API Keys → Create Key. Copy the `sk-ant-...` value.
+2. Add it to your `.env.local` (create from `.env.example` if needed):
+   ```
+   ANTHROPIC_API_KEY=sk-ant-...your-key-here...
+   ```
+3. Restart the Case Calendar server (or NSSM service) so the env var is picked up:
+   ```powershell
+   nssm restart CaseCalendar
+   ```
+4. Verify: open the app, press Cmd+K, type a deadline, press Enter. The form should open prefilled within ~2 seconds.
+
+### Skipping This Feature
+
+If you do not want NL parsing, simply leave `ANTHROPIC_API_KEY` unset (or omit the line from `.env.local`). Cmd+K still opens; pressing Enter shows the message "NL parser disabled — see docs/DEPLOYMENT.md#nl-quick-add-phase-11". The rest of the app is fully functional.
+
+### Manual Debug: parse:once
+
+For prompt tuning, run a one-shot parse from the command line:
+```powershell
+npm run parse:once -- "Smith deposition June 15"
+```
+This prints the parsed JSON (caseLabel, typeId, date, description) to stdout. Useful when adjusting the system prompt in `src/server/lib/nl-parser.ts` to test the change against representative inputs before redeploying.
+
+### Cost Tracking
+
+The parse route logs token usage via pino structured logs (`inputTokens`, `outputTokens`) on every successful parse. For real-world cost monitoring, check the Anthropic console at https://console.anthropic.com/usage (filter by API key). Expect ~$0.001 per 100 parses based on the 50-character typical input; actual cost depends on prompt length and type-list size.
+
+### Privacy Note
+
+The system prompt and tool schema include the names of your deadline types (Filing, Hearing, Deposition, etc.) so the LLM can map free-text to a typeId. Type names are considered non-private metadata. If you have renamed types to include client-identifying information, those names will be transmitted to Anthropic when NL parsing is invoked — adjust accordingly.
+
+### Troubleshooting
+
+- **"NL parser disabled" message on Enter** — `ANTHROPIC_API_KEY` is unset or empty in `.env.local`. Add the key and restart.
+- **"Parser timed out" message** — Anthropic API took longer than 10 seconds; usually transient. Retry. The SDK is configured with `maxRetries: 0` so the user controls retry timing.
+- **"Couldn't parse — try rewording" message** — LLM returned a malformed result (invalid date format, missing required field). Try a clearer input: include the case name, deadline type, and a date.
+- **High costs in Anthropic dashboard** — Check that the app is not invoking parse repeatedly. The route caps text at 500 chars per request and the SDK has `maxRetries: 0`. If costs grow, audit the logs for unexpected `nl-parse: route success` lines.
+
+### Resource Usage
+
+- ~3 MB resident in the Node process for the Anthropic SDK client (held only when first parse fires; not at server startup)
+- One outbound HTTPS connection per Cmd+K Enter press; closed immediately after response
+- No background jobs; no cron schedule (unlike Phase 9 wallpaper / Phase 10 email)
+
+---
+
 ## SAFE Checklist Summary
 
 Every SAFE requirement has an automated proof test. Run `cross-env TZ=America/Los_Angeles npm test` to confirm all pass.
