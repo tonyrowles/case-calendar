@@ -192,8 +192,11 @@ export function App() {
   }, [])
 
   // POLISH-04: lookup the source deadline by id and set as duplicate source.
+  // NL-01 mutual exclusion: clear nlSource so prefillValues sources are mutually exclusive
+  // (mirrors the onParsed handler which clears duplicateSource — RESEARCH.md Pitfall 6).
   const onDuplicate = useCallback((id: number) => {
     const source = deadlinesQuery.data?.find(d => d.id === id) ?? null
+    setNlSource(null)
     setDuplicateSource(source)
   }, [deadlinesQuery.data])
 
