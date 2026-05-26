@@ -22,6 +22,15 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# Helper: gate every nssm install/set on $LASTEXITCODE -- prevents silent install failures from reaching the success footer.
+function Invoke-Nssm {
+  & nssm @args
+  if ($LASTEXITCODE -ne 0) {
+    Write-Error "nssm $($args -join ' ') failed with exit code $LASTEXITCODE"
+    exit 1
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Pre-flight check 1: Windows system timezone must be Pacific Standard Time
 # ---------------------------------------------------------------------------
@@ -44,7 +53,23 @@ if (-not (Get-Command nssm -ErrorAction SilentlyContinue)) {
 }
 
 # ---------------------------------------------------------------------------
-# Pre-flight check 3: build artifacts must exist (prevents NSSM restart loop)
+# Pre-flight check 3: must be running as Administrator
+#
+# NSSM install/set calls require Administrator rights to register and
+# configure a Windows service. Without elevation, NSSM prints
+# 'Access is denied.' to stderr and exits non-zero on every call, but
+# previously the wrapper script ignored those failures and still printed
+# a success footer. Refuse to attempt any install/set calls from a
+# non-elevated shell.
+# ---------------------------------------------------------------------------
+$principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+  Write-Error "Administrator rights required to install the Windows service. Right-click PowerShell or Windows Terminal, choose 'Run as Administrator', then re-run this script."
+  exit 1
+}
+
+# ---------------------------------------------------------------------------
+# Pre-flight check 4: build artifacts must exist (prevents NSSM restart loop)
 # ---------------------------------------------------------------------------
 $serverJs = Join-Path $InstallDir "dist\server\src\server\index.js"
 if (-not (Test-Path $serverJs)) {
@@ -111,16 +136,16 @@ $nodeExe = (Get-Command node -ErrorAction Stop).Source
 $logsDir = Join-Path $InstallDir "logs"
 New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
 
-nssm install $ServiceName $nodeExe $serverJs
-nssm set $ServiceName AppDirectory $InstallDir
-nssm set $ServiceName AppEnvironmentExtra "TZ=America/Los_Angeles" "NODE_ENV=production"
-nssm set $ServiceName AppStdout (Join-Path $logsDir "case-calendar.log")
-nssm set $ServiceName AppStderr (Join-Path $logsDir "case-calendar.err")
-nssm set $ServiceName AppRotateFiles 1
-nssm set $ServiceName AppRotateOnline 1
-nssm set $ServiceName AppRotateBytes 10485760
-nssm set $ServiceName AppExit Default Restart
-nssm set $ServiceName Start SERVICE_AUTO_START
+Invoke-Nssm install $ServiceName $nodeExe $serverJs
+Invoke-Nssm set $ServiceName AppDirectory $InstallDir
+Invoke-Nssm set $ServiceName AppEnvironmentExtra "TZ=America/Los_Angeles" "NODE_ENV=production"
+Invoke-Nssm set $ServiceName AppStdout (Join-Path $logsDir "case-calendar.log")
+Invoke-Nssm set $ServiceName AppStderr (Join-Path $logsDir "case-calendar.err")
+Invoke-Nssm set $ServiceName AppRotateFiles 1
+Invoke-Nssm set $ServiceName AppRotateOnline 1
+Invoke-Nssm set $ServiceName AppRotateBytes 10485760
+Invoke-Nssm set $ServiceName AppExit Default Restart
+Invoke-Nssm set $ServiceName Start SERVICE_AUTO_START
 
 # ---------------------------------------------------------------------------
 # Phase 9 Session 0 fix: optionally run the service as a specific user account.
@@ -136,7 +161,7 @@ if ($LogonUser -ne "") {
     $LogonPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
     [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) | Out-Null
   }
-  nssm set $ServiceName ObjectName $LogonUser $LogonPassword
+  Invoke-Nssm set $ServiceName ObjectName $LogonUser $LogonPassword
   Write-Host "Service account set to: $LogonUser (Session 1+ -- wallpaper apply enabled)"
 } else {
   Write-Warning "No -LogonUser provided. Service will run as LocalSystem (Session 0)."

@@ -302,6 +302,11 @@ if (-not $SkipPlaywright) {
 # ---------------------------------------------------------------------------
 if (-not $SkipService) {
   Write-Step "NSSM service install"
+  $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+  if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Error "Administrator rights required to install the Windows service. Close this terminal, right-click PowerShell (or Windows Terminal), choose 'Run as Administrator', and re-run .\scripts\setup.ps1. To skip the service install entirely, re-run with -SkipService."
+    exit 1
+  }
   if ($LogonUser -eq "") {
     Write-Host "    For Phase 9 wallpaper apply, the service MUST run as your interactive user (not LocalSystem)."
     Write-Host "    Your username: $env:USERNAME"
