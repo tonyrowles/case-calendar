@@ -54,20 +54,52 @@ if (-not (Test-Path $serverJs)) {
 
 # ---------------------------------------------------------------------------
 # Idempotent remove: stop + remove the existing service if present
+#
+# Under $ErrorActionPreference = "Stop", Windows PowerShell 5.1 elevates a
+# native command's stderr output to a terminating error (NativeCommandError).
+# `nssm status` prints "Can't open service!" to stderr and exits non-zero
+# when the service is not registered -- which on a clean machine would kill
+# the script before we can decide "service does not exist, just install".
+#
+# Fix: scope $ErrorActionPreference = "Continue" around each nssm probe call
+# AND redirect stderr into the success stream (2>&1) so PS 5.1 does not see
+# free-floating stderr lines as error records. Restore the prior policy via
+# try/finally so the strict "Stop" posture is preserved for every later
+# nssm install / nssm set / New-Item call.
 # ---------------------------------------------------------------------------
-nssm status $ServiceName 2>$null | Out-Null
-if ($LASTEXITCODE -eq 0) {
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+  nssm status $ServiceName 2>&1 | Out-Null
+  $serviceExists = ($LASTEXITCODE -eq 0)
+} finally {
+  $ErrorActionPreference = $prevEAP
+}
+
+if ($serviceExists) {
   Write-Host "Stopping existing $ServiceName service..."
-  nssm stop $ServiceName confirm 2>$null | Out-Null
+  $prevEAP = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    nssm stop $ServiceName confirm 2>&1 | Out-Null
+  } finally {
+    $ErrorActionPreference = $prevEAP
+  }
   # Poll until fully stopped (max 30 seconds) to avoid the SCM async-stop race
   # where nssm remove is called while the service is still in SERVICE_STOP_PENDING,
   # causing a silent failure that leaves the old service registered.
-  $waited = 0
-  while ($waited -lt 30) {
-    $status = (nssm status $ServiceName 2>$null)
-    if ($status -match 'SERVICE_STOPPED') { break }
-    Start-Sleep -Seconds 1
-    $waited++
+  $prevEAP = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $waited = 0
+    while ($waited -lt 30) {
+      $status = (nssm status $ServiceName 2>&1)
+      if ($status -match 'SERVICE_STOPPED') { break }
+      Start-Sleep -Seconds 1
+      $waited++
+    }
+  } finally {
+    $ErrorActionPreference = $prevEAP
   }
   nssm remove $ServiceName confirm | Out-Null
 }
