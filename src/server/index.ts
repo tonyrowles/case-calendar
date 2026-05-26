@@ -106,7 +106,11 @@ if (process.env.VITEST !== 'true') {
           'cors: tailscale origins allowed (http + https)'
         )
       }
-      startWallpaperWorker()   // WALL-01/02/04/05: fire-and-forget; non-blocking
+      if (process.env.WALLPAPER_ENABLED === 'true') {
+        startWallpaperWorker()   // WALL-01/02/04/05: fire-and-forget; non-blocking
+      } else {
+        logger.info('wallpaper disabled (set WALLPAPER_ENABLED=true in .env.local)')
+      }
       void startEmailWorker()  // EMAIL-01/02/03: async; no-op when unconfigured; never blocks server boot
     }
   )

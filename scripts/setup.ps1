@@ -298,19 +298,28 @@ if (-not $SkipEnvBootstrap -and -not (Test-Path $envLocal)) {
 # Step 6: Playwright Chromium (Phase 9 wallpaper)
 # ---------------------------------------------------------------------------
 if (-not $SkipPlaywright) {
-  Write-Step "Playwright Chromium install (Phase 9 wallpaper worker)"
-  $playwrightCacheDir = Join-Path $env:USERPROFILE "AppData\Local\ms-playwright"
-  if (Test-Path $playwrightCacheDir) {
-    Write-Skip "Playwright cache already present at $playwrightCacheDir"
-  } elseif (Confirm-Continue "Download Chromium for wallpaper rendering? (~120MB)") {
-    npx playwright install chromium
-    if ($LASTEXITCODE -ne 0) {
-      Write-Warning "Playwright install failed. Wallpaper worker will fail to launch until you run: npx playwright install --with-deps chromium"
-    } else {
-      Write-Ok "Chromium installed"
-    }
+  $wallpaperEnabled = $false
+  if (Test-Path $envLocal) {
+    $wallpaperEnabled = (Select-String -Path $envLocal -Pattern '^WALLPAPER_ENABLED=true$' -Quiet)
+  }
+  if (-not $wallpaperEnabled) {
+    Write-Step "Playwright Chromium install (Phase 9 wallpaper worker)"
+    Write-Skip "Wallpaper disabled (set WALLPAPER_ENABLED=true in .env.local to enable)"
   } else {
-    Write-Skip "Playwright Chromium (wallpaper worker will be disabled until installed)"
+    Write-Step "Playwright Chromium install (Phase 9 wallpaper worker)"
+    $playwrightCacheDir = Join-Path $env:USERPROFILE "AppData\Local\ms-playwright"
+    if (Test-Path $playwrightCacheDir) {
+      Write-Skip "Playwright cache already present at $playwrightCacheDir"
+    } elseif (Confirm-Continue "Download Chromium for wallpaper rendering? (~120MB)") {
+      npx playwright install chromium
+      if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Playwright install failed. Wallpaper worker will fail to launch until you run: npx playwright install --with-deps chromium"
+      } else {
+        Write-Ok "Chromium installed"
+      }
+    } else {
+      Write-Skip "Playwright Chromium (wallpaper worker will be disabled until installed)"
+    }
   }
 } else {
   Write-Skip "Playwright Chromium (per -SkipPlaywright)"
