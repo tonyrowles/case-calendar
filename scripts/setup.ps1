@@ -23,6 +23,7 @@
 #
 # Flags:
 #   -SkipTests           Skip 'npm test'
+#   -SkipDbPush          Skip drizzle-kit schema push (assume schema already present)
 #   -SkipPlaywright      Skip 'npx playwright install chromium' (~120MB download)
 #   -SkipService         Skip NSSM service install (leave existing or run via 'npm run start')
 #   -SkipEnvBootstrap    Skip .env.local prompt (assume already configured)
@@ -35,6 +36,7 @@
 
 param(
   [switch]$SkipTests,
+  [switch]$SkipDbPush,
   [switch]$SkipPlaywright,
   [switch]$SkipService,
   [switch]$SkipEnvBootstrap,
@@ -165,6 +167,23 @@ if ($buildStale) {
   Write-Ok "Built dist/server + dist/client"
 } else {
   Write-Skip "Build artifacts current"
+}
+
+# ---------------------------------------------------------------------------
+# Step 3.5: drizzle-kit push
+#
+# drizzle-kit push is idempotent and fast (sub-second on the tiny SQLite file).
+# No skip-detection by mtime is needed; the only reason to skip is when the
+# user manages their schema out-of-band, in which case -SkipDbPush opts out.
+# Must run BEFORE npm test (some tests touch the DB) and BEFORE service start.
+# ---------------------------------------------------------------------------
+Write-Step "db push (drizzle-kit)"
+if (-not $SkipDbPush) {
+  npm run db:push
+  if ($LASTEXITCODE -ne 0) { Write-Error "drizzle-kit schema push failed"; exit 1 }
+  Write-Ok "Schema pushed"
+} else {
+  Write-Skip "db push (per -SkipDbPush)"
 }
 
 # ---------------------------------------------------------------------------
