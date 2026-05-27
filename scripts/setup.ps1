@@ -160,6 +160,22 @@ if ((Test-Path $distServer) -and (Test-Path $distClient)) {
   $newestSource = (Get-ChildItem -Path "src" -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
   $oldestArtifact = @((Get-Item $distServer).LastWriteTime, (Get-Item $distClient).LastWriteTime) | Sort-Object | Select-Object -First 1
   if ($newestSource -lt $oldestArtifact) { $buildStale = $false }
+  # Defense in depth: even if mtimes say fresh, a real Vite build must reference
+  # its hashed asset bundles. tests/serve-static.test.ts used to leave a 97-byte
+  # fixture in dist/client/index.html that has no script tag at all; that would
+  # otherwise sneak past the mtime check and be served as the production page.
+  # A real Vite-generated index.html always contains '/assets/index-' references
+  # (script + stylesheet). Size alone is noisy (a real build can be ~400 bytes
+  # when bundle content is split into the /assets/ tree), so we gate on the
+  # pattern only.
+  if (-not $buildStale) {
+    $indexSize    = (Get-Item $distClient).Length
+    $indexContent = Get-Content $distClient -Raw -ErrorAction SilentlyContinue
+    if ($indexContent -notmatch '/assets/index-') {
+      Write-Warning "dist/client/index.html looks like a stub or fixture ($indexSize bytes, no /assets/index- reference). Rebuilding."
+      $buildStale = $true
+    }
+  }
 }
 if ($buildStale) {
   npm run build

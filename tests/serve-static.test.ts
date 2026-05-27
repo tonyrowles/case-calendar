@@ -2,16 +2,17 @@
  * OPS-02: Hono serveStatic + SPA fallback in production mode.
  *
  * Exercises the production branch of src/server/index.ts which mounts:
- *   1. /assets/* — serveStatic with immutable cache header
- *   2. /*        — serveStatic for other static files
- *   3. notFound  — SPA fallback returning dist/client/index.html for non-API paths
+ *   1. /assets/* -- serveStatic with immutable cache header
+ *   2. /*        -- serveStatic for other static files
+ *   3. notFound  -- SPA fallback returning dist/client/index.html for non-API paths
  *
  * NODE_ENV=production is set before the dynamic import so the production branch
  * is evaluated. This file uses NO static import of index.ts to avoid the module
  * being loaded before NODE_ENV is set.
  *
- * Fixtures: a minimal dist/client/ tree is created in beforeAll and the asset
- * file is cleaned up in afterAll (index.html is part of the real build and left).
+ * Fixtures: a minimal dist/client/ tree is created in beforeAll; afterAll
+ * restores the real index.html (if any was backed up) and removes the
+ * test-owned asset file.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import fs from 'node:fs'
@@ -26,11 +27,17 @@ describe('OPS-02: Hono serveStatic + SPA notFoundHandler in production mode', ()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let app: Hono<{ Variables: AppVariables }>
   let prevNodeEnv: string | undefined
+  let originalIndexHtml: Buffer | null = null
 
   beforeAll(async () => {
     // Create fixture dist/client tree so the production block can read index.html.
     // In CI the real build may not have run yet, so we provide minimal fixtures.
     fs.mkdirSync(path.join(clientDir, 'assets'), { recursive: true })
+    // Back up the real index.html so afterAll can restore it. Previously the
+    // 97-byte fixture leaked into dist/client/ and was served as the production page.
+    if (fs.existsSync(indexPath)) {
+      originalIndexHtml = fs.readFileSync(indexPath)
+    }
     fs.writeFileSync(
       indexPath,
       '<!doctype html><html><head><title>fixture</title></head><body><div id="root"></div></body></html>',
@@ -52,7 +59,12 @@ describe('OPS-02: Hono serveStatic + SPA notFoundHandler in production mode', ()
   afterAll(() => {
     if (prevNodeEnv === undefined) delete process.env.NODE_ENV
     else process.env.NODE_ENV = prevNodeEnv
-    try { fs.unlinkSync(assetPath) } catch { /* fixture cleanup — ignore if missing */ }
+    try { fs.unlinkSync(assetPath) } catch { /* test-owned, ignore */ }
+    if (originalIndexHtml !== null) {
+      fs.writeFileSync(indexPath, originalIndexHtml)
+    } else {
+      try { fs.unlinkSync(indexPath) } catch { /* nothing to restore */ }
+    }
   })
 
   it('serves /assets/<file>.js with Cache-Control: public, max-age=31536000, immutable', async () => {
@@ -76,8 +88,8 @@ describe('OPS-02: Hono serveStatic + SPA notFoundHandler in production mode', ()
     expect(ct).toContain('application/json')
   })
 
-  it('returns JSON 404 for bare /api path (no trailing slash) — CR-03', async () => {
-    // '/api'.startsWith('/api/') is false — without the p === '/api' guard the
+  it('returns JSON 404 for bare /api path (no trailing slash) -- CR-03', async () => {
+    // '/api'.startsWith('/api/') is false -- without the p === '/api' guard the
     // notFound handler fell through to the SPA fallback, returning 200 HTML.
     const res = await app.request('/api')
     expect(res.status).toBe(404)
@@ -85,7 +97,7 @@ describe('OPS-02: Hono serveStatic + SPA notFoundHandler in production mode', ()
     expect(ct).toContain('application/json')
   })
 
-  it('production CORS rejects Origin: http://localhost:3747 (not in production allowlist) — WR-02', async () => {
+  it('production CORS rejects Origin: http://localhost:3747 (not in production allowlist) -- WR-02', async () => {
     // Dev/prod CORS asymmetry: in dev, localhost:3747 is allowed; in production
     // only 127.0.0.1:3747 is in PROD_ORIGINS. A request with Origin: localhost:3747
     // in production must receive no Access-Control-Allow-Origin header, which is
