@@ -1,361 +1,281 @@
 # Self-host on Windows
 
-Cold-start runbook for deploying Case Calendar as a Windows service that survives reboot. Covers prerequisites, NSSM install, verification, update procedure, troubleshooting, and uninstall.
+Cold-start runbook for deploying Case Calendar as a Windows service that survives reboot.
+
+---
+
+## Quick Path
+
+1. Administrator PowerShell: `.\scripts\setup.ps1` walks through pre-flight, build, db push, tests, optional .env.local bootstrap, NSSM install, post-install probe.
+2. Open `http://127.0.0.1:3747`.
+
+Defaults: NSSM installs as **LocalSystem** unless you choose your own user (LocalSystem needs no stored password); **WALLPAPER_ENABLED=false** -- Phase 9 wallpaper is off until you opt in; Phase 10 email and Phase 11 NL parser are off until you fill in `.env.local`.
+
+PIN-only or Microsoft Account sign-in (no local password)? Skip NSSM and use the [Task Scheduler Alternative (no stored password)](#task-scheduler-alternative-no-stored-password) -- runs the server in your user session and also fixes the Phase 9 wallpaper Session 0 problem for free.
 
 ---
 
 ## Prerequisites
 
-Before running `scripts\nssm-install.ps1`, confirm these are in place:
-
-- **Node.js 22 LTS** — verify with `node --version` (expected `v22.x.x`). Download from nodejs.org.
-- **NSSM 2.24+** — verify with `nssm version`. Download from nssm.cc/download. Place `nssm.exe` somewhere on your `PATH` (e.g. `C:\Windows\System32`).
-- **Admin PowerShell** — right-click PowerShell → "Run as Administrator". Without admin rights the service install will fail. Fallback: run `npm run start` in a normal terminal (no service, no auto-restart on reboot).
-- **Windows system timezone = `Pacific Standard Time`** — verify with `[System.TimeZoneInfo]::Local.Id` in PowerShell. If different, the install script warns and prompts for confirmation before continuing. All `today` date calculations and backup retention use this timezone.
+- **Node.js 22 LTS** (`node --version`) -- nodejs.org.
+- **NSSM 2.24+** (`nssm version`) -- nssm.cc/download; place `nssm.exe` on `PATH`.
+- **Admin PowerShell** -- right-click -> **Run as Administrator**. Fallback: `npm run start` in a normal terminal (no service, no auto-restart).
+- **Windows timezone = `Pacific Standard Time`** (`[System.TimeZoneInfo]::Local.Id`). If different, the install script warns and prompts. All `today` calculations and backup retention use this timezone.
 
 ---
 
 ## Install
 
+`scripts\setup.ps1` is the supported, idempotent install path. From Administrator PowerShell:
+
 ```powershell
-# 1. Clone the repo
 git clone <repo> C:\apps\case-calendar
-
-# 2. Enter the project directory
 cd C:\apps\case-calendar
-
-# 3. Install Node dependencies
-npm install
-
-# 4. Build production artifacts (Vite + tsc)
-npm run build
-
-# 5. Install the NSSM service (run as Administrator)
-pwsh -ExecutionPolicy Bypass -File .\scripts\nssm-install.ps1
-
-# 6. Start the service
-nssm start CaseCalendar
+powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1
 ```
 
-The install script is idempotent — re-running it stops and removes the prior service before installing fresh. All NSSM settings are re-applied from the script on each run.
+What setup.ps1 does:
+
+1. **Pre-flight** -- Node 22 LTS, npm, git, NSSM, Tailscale, Windows timezone.
+2. **npm install** -- skipped if `node_modules/.package-lock.json` newer than `package.json`.
+3. **npm run build** -- skipped only when dist is newer than `src/**` AND `dist/client/index.html` references `/assets/index-` (catches test-fixture stubs).
+4. **db push** -- `npm run db:push` (drizzle-kit). Sub-second. `-SkipDbPush` skips.
+5. **npm test** -- Vitest. `-SkipTests` skips.
+6. **.env.local bootstrap** (optional) -- prompts for SMTP, Anthropic, Tailscale.
+7. **Playwright Chromium** -- ONLY when `WALLPAPER_ENABLED=true`; else skipped.
+8. **NSSM service** -- Administrator pre-check. Prompts to install as `.\<your-username>` or LocalSystem. `-SkipService` skips.
+9. **Tailscale Serve** (optional).
+10. **Verify** -- netstat for `127.0.0.1:3747` + `/api/identity` probe.
+
+**Manual path:** `npm install; npm run build; npm run db:push`; optional `.env.local`; optional `npx playwright install chromium` (only if `WALLPAPER_ENABLED=true`); `pwsh -ExecutionPolicy Bypass -File .\scripts\nssm-install.ps1` from Administrator PowerShell; `nssm start CaseCalendar`. `nssm-install.ps1` has its own Administrator pre-check and `Invoke-Nssm` helper gating every `nssm install`/`set` call on exit code -- silent failures no longer reach the success message.
+
+Re-running is safe: steps short-circuit if done; NSSM script removes any prior service before installing fresh.
 
 ---
 
 ## Verify
 
-Copy-pasteable PowerShell verification checklist — run each command after `nssm start CaseCalendar`:
+After `nssm start CaseCalendar`:
 
 ```powershell
-# Service is running
-nssm status CaseCalendar
-# Expected output: SERVICE_RUNNING
-
-# Bound to loopback only (SAFE-07)
-netstat -ano | findstr 3747
-# Expected: exactly one line containing 127.0.0.1:3747 (NOT 0.0.0.0:3747)
-
-# HTTP 200 from SPA root
-Invoke-WebRequest http://127.0.0.1:3747 -UseBasicParsing | Select-Object -ExpandProperty StatusCode
-# Expected: 200
-
-# JSON array from API
-Invoke-WebRequest http://127.0.0.1:3747/api/deadlines -UseBasicParsing | Select-Object -ExpandProperty Content
-# Expected: JSON array ([] if no deadlines yet)
-
-# Log file contains startup line
-Get-Content C:\apps\case-calendar\logs\case-calendar.log -Tail 20
-# Expected: pino JSON lines including "Server listening on http://127.0.0.1:3747"
+nssm status CaseCalendar                                                          # SERVICE_RUNNING
+netstat -ano | findstr 3747                                                       # 127.0.0.1:3747 (NOT 0.0.0.0)
+(Invoke-WebRequest http://127.0.0.1:3747 -UseBasicParsing).StatusCode             # 200
+(Invoke-WebRequest http://127.0.0.1:3747/api/deadlines -UseBasicParsing).Content  # JSON
+Get-Content C:\apps\case-calendar\logs\case-calendar.log -Tail 20                 # "Server listening on http://127.0.0.1:3747"
 ```
 
-Open `http://127.0.0.1:3747` in a browser. The SPA loads and the deadlines view renders.
+Open `http://127.0.0.1:3747` -- SPA loads, deadlines view renders.
 
 ---
 
 ## Post-Install Reboot Verification (OPS-04)
 
-Restart Windows normally. After login, open `http://127.0.0.1:3747` in a browser **without launching anything manually** (no terminal, no npm). If the page loads, OPS-04 passes — the NSSM service started automatically at boot via `Start=SERVICE_AUTO_START`.
+Restart Windows. After login, open `http://127.0.0.1:3747` **without launching anything manually**. If the page loads, OPS-04 passes -- the NSSM service started at boot via `Start=SERVICE_AUTO_START`.
 
 ---
 
 ## Update Procedure
 
 ```powershell
-# Stop the service
-nssm stop CaseCalendar
-
-# Pull latest changes
-cd C:\apps\case-calendar
-git pull
-
-# Install any new dependencies
-npm install
-
-# Rebuild
-npm run build
-
-# Restart the service
-nssm start CaseCalendar
+nssm stop CaseCalendar; cd C:\apps\case-calendar; git pull; npm install; npm run build; nssm start CaseCalendar
 ```
 
-Verify the update with the same checklist in the Verify section above.
+Verify with the Verify section above.
 
 ---
 
 ## Troubleshoot
 
-### Service won't start / restart loop
+**Service won't start / restart loop** -- usually `dist\server\src\server\index.js` missing/corrupted. `Get-Content C:\apps\case-calendar\logs\case-calendar.err -Tail 30`. If `Cannot find module`, `npm run build; nssm restart CaseCalendar`. NSSM restart-loops on non-zero Node exit; 10MB log rotation (`AppRotateBytes`) prevents disk exhaustion.
 
-The most common cause is `dist\server\src\server\index.js` missing or corrupted. Tail the error log first:
+**Bound to wrong port/address** -- if `netstat -ano | findstr 3747` shows `0.0.0.0:3747`, SAFE-07 regressed. `hostname` in `src/server/index.ts` must be `'127.0.0.1'`. Reproduce: `cross-env TZ=America/Los_Angeles npm test -- tests/safe-07-bind-loopback.test.ts`.
 
-```powershell
-Get-Content C:\apps\case-calendar\logs\case-calendar.err -Tail 30
-```
+**Logs not appearing** -- confirm `logs\` exists and the service account (LocalSystem by default) has write permission. Install under `C:\apps\`, not `C:\Program Files\` (UAC-restricted write).
 
-If the error is `Cannot find module`, run `npm run build` then `nssm restart CaseCalendar`. NSSM enters a restart loop when Node exits with a non-zero code — the 10MB log rotation (`AppRotateBytes`) prevents disk exhaustion while you investigate.
+### Common symptoms
 
-### Bound to wrong port / address
-
-If `netstat -ano | findstr 3747` shows `0.0.0.0:3747` instead of `127.0.0.1:3747`, SAFE-07 has regressed. Investigate `src/server/index.ts` — the `hostname` parameter passed to `serve()` must be `'127.0.0.1'`. Run `cross-env TZ=America/Los_Angeles npm test -- tests/safe-07-bind-loopback.test.ts` to reproduce.
-
-### Logs not appearing
-
-Confirm the `logs\` directory exists under the install path and that the service account (LocalSystem by default) has write permission. Install the app under `C:\apps\` rather than `C:\Program Files\` — Program Files has UAC-restricted write access for LocalSystem.
+| Symptom | Cause / Fix |
+|---------|-------------|
+| `Service did not start due to a logon failure` | PIN/Microsoft Account sign-in -- no stored Windows password. Use [Task Scheduler](#task-scheduler-alternative-no-stored-password); for NSSM `-LogonUser`, set a local password first (`net user $env:USERNAME *`) and reinstall. |
+| `SqliteError: no such table: deadline_types` | Drizzle schema not pushed -- `npm run db:push`. `setup.ps1` Step 3.5 does this. |
+| Blank page despite server 200 | Stale/test-fixture `dist/client/index.html` past mtime check -- `Remove-Item -Recurse -Force dist; npm run build`. `setup.ps1` now also checks `/assets/index-` references. |
+| NSSM `Can't open service!` / `OpenService(): Access is denied.` | Non-elevated PowerShell -- right-click -> **Run as Administrator**. Both scripts now have an Administrator pre-check. |
+| `Administrator rights required to install the Windows service.` | Same as above. |
+| `nssm <verb> ... failed with exit code N` from `Invoke-Nssm` | NSSM rejected the call -- read the preceding `nssm` stderr line for the failing verb/argument. |
 
 ---
 
 ## Uninstall
 
 ```powershell
-# Stop and remove the service
-nssm stop CaseCalendar
-nssm remove CaseCalendar confirm
-
-# Optional: remove the install directory
-Remove-Item -Recurse -Force C:\apps\case-calendar
+nssm stop CaseCalendar; nssm remove CaseCalendar confirm
+Remove-Item -Recurse -Force C:\apps\case-calendar   # optional
 ```
 
-The SQLite database lives in the `data\` subdirectory. Move `data\deadlines.db` somewhere safe before removing the install directory if you want to keep your deadline history.
+SQLite DB lives in `data\deadlines.db` -- move it somewhere safe first if you want to keep deadline history.
 
 ---
 
 ## Remote Access via Tailscale
 
-Tailscale Serve proxies tailnet traffic to the loopback-bound Hono server, making Case Calendar reachable from your phone or travel laptop over your private tailnet — no public internet exposure, no app source changes required. *Hono continues to bind `127.0.0.1:3747` only. Tailscale Serve is a same-host proxy; SAFE-07 is preserved.*
+Tailscale Serve proxies tailnet traffic to the loopback Hono server -- no public exposure, no source changes. *Hono binds `127.0.0.1:3747` only; Tailscale Serve is a same-host proxy, SAFE-07 preserved.*
 
-### Prerequisites
-
-- Tailscale installed on the host Windows machine (the machine running the NSSM service). Download from [tailscale.com](https://tailscale.com/download).
-- Tailscale installed on the client device (phone, travel laptop). Both devices must be signed in to the same tailnet.
-- The Case Calendar NSSM service installed and running. Complete the **Install** and **Verify** sections above before proceeding.
+**Prerequisites:** Tailscale on host AND client (https://tailscale.com/download), same tailnet. NSSM service installed and running.
 
 ### Enable Tailscale Serve
 
-The serve configuration persists across reboots — run this command once. After a Windows reboot, tailscaled resumes the serve config automatically (per [tailscale.com/kb/1312/serve](https://tailscale.com/kb/1312/serve)).
-
-Open an **Administrator** PowerShell terminal (no `sudo` needed on Windows):
+Persists across reboots ([tailscale.com/kb/1312/serve](https://tailscale.com/kb/1312/serve)). From Administrator PowerShell:
 
 ```powershell
 tailscale serve --bg http://127.0.0.1:3747
+tailscale serve status   # one proxy entry mapping tailnet hostname to http://127.0.0.1:3747
 ```
 
-Verify the proxy is active:
-
-```powershell
-tailscale serve status
-# Expected: a single proxy entry mapping your tailnet hostname to http://127.0.0.1:3747
-```
-
-The output of `tailscale serve status` shows your tailnet hostname (e.g. `lawyer-laptop.tail-scale.ts.net`). Copy this hostname — you will need it in the next step. **Do not include the scheme or port.**
+Copy the tailnet hostname (e.g. `lawyer-laptop.tail-scale.ts.net`) -- hostname only, no scheme, no port.
 
 ### Configure CORS for the Tailscale Origin
 
-When a browser on your phone or travel laptop visits Case Calendar via the tailnet hostname, it sends an `Origin` header containing that hostname (e.g. `http://lawyer-laptop.tail-scale.ts.net`). The server's CORS allowlist must include this origin or browsers will reject all API responses.
-
-Set the `TAILSCALE_HOSTNAME` environment variable via NSSM. Replace `lawyer-laptop.tail-scale.ts.net` with the actual tailnet hostname from `tailscale serve status`:
+Browsers send `Origin: http://<your-tailnet-hostname>`; the CORS allowlist must include it:
 
 ```powershell
 nssm set CaseCalendar AppEnvironmentExtra "TZ=America/Los_Angeles" "NODE_ENV=production" "TAILSCALE_HOSTNAME=lawyer-laptop.tail-scale.ts.net"
 nssm restart CaseCalendar
 ```
 
-> **Warning — hostname format:** Set `TAILSCALE_HOSTNAME` to the hostname **only** — no `http://` prefix, no port suffix, no trailing slash. Correct example: `lawyer-laptop.tail-scale.ts.net`. The server appends `http://` and `https://` automatically. Including the scheme produces a malformed origin like `http://http://...` that never matches any browser request and causes CORS errors.
-
-> **Warning — service restart required:** After **any** change to `TAILSCALE_HOSTNAME` via `nssm set`, you **must** restart the service (`nssm restart CaseCalendar`). NSSM env vars are read once at service start — the in-memory CORS allowlist will be stale until the service restarts. Symptom if you forget: CORS errors in the browser console from the tailnet device.
+> **Warning:** hostname **only** (no `http://`, port, or slash). The server appends schemes; including one produces `http://http://...` and CORS errors. After any change, restart the service -- env vars are read once at start.
 
 ### Verify Remote Access
 
-Run each step from the **client device** (phone or travel laptop), not the host machine:
+From the **client device**: `http://<your-tailnet-hostname>` loads; `/api/identity` returns `{"user":"<your-tailnet-email>"}` confirming `Tailscale-User-Login` injection. (Direct loopback from host returns `{"user":"local"}` -- expected; header only on the proxy path.) On host: `Get-Content C:\apps\case-calendar\logs\case-calendar.log -Tail 20 | Select-String "tailscale"` -- expect `cors: tailscale origins allowed (http + https)`.
 
-1. Open `http://<your-tailnet-hostname>` in a browser. The Case Calendar SPA should load and the deadlines list should render.
-
-2. Open `http://<your-tailnet-hostname>/api/identity`. The response should be `{"user":"<your-tailnet-email>"}`. This confirms the `Tailscale-User-Login` header is being injected by Tailscale Serve and read by the server.
-
-   **Note:** If you open `http://127.0.0.1:3747/api/identity` from the **host** machine (direct loopback, bypassing Tailscale Serve), the response will be `{"user":"local"}` — this is correct and expected behavior. The `Tailscale-User-Login` header is only present on the Tailscale Serve proxy path.
-
-3. On the host, confirm the CORS allowlist extension is active in the service log:
-
-   ```powershell
-   Get-Content C:\apps\case-calendar\logs\case-calendar.log -Tail 20 | Select-String "tailscale"
-   # Expected: a pino JSON line with message "cors: tailscale origins allowed (http + https)"
-   ```
-
-### Optional: HTTPS via Tailscale Auto-Cert
-
-HTTP over the tailnet is encrypted end-to-end by WireGuard and is safe for this use case. Browsers may show a "Not Secure" indicator — this is cosmetic on a private tailnet (see [tailscale.com/kb/1153/enabling-https](https://tailscale.com/kb/1153/enabling-https)).
-
-For HTTPS in the browser address bar (auto-provisioned Let's Encrypt cert — no manual cert management):
-
-```powershell
-tailscale serve off
-tailscale serve --bg --https=443 http://127.0.0.1:3747
-```
-
-Requires the HTTPS feature enabled on your tailnet (configure at the Tailscale admin panel). Tailscale auto-renews the certificate tied to your tailnet hostname.
+**Optional HTTPS:** HTTP over the tailnet is WireGuard-encrypted; "Not Secure" is cosmetic ([tailscale.com/kb/1153](https://tailscale.com/kb/1153/enabling-https)). For HTTPS in the address bar: `tailscale serve off; tailscale serve --bg --https=443 http://127.0.0.1:3747` (requires HTTPS feature in tailnet admin panel; auto-renews).
 
 ### Troubleshooting
 
-#### CORS errors from the tailnet device
+| Symptom | Cause / Fix |
+|---------|-------------|
+| CORS errors from tailnet device | `TAILSCALE_HOSTNAME` unset/wrong, or service not restarted -- `nssm get CaseCalendar AppEnvironmentExtra`; correct; `nssm restart CaseCalendar` |
+| Phone can't reach right after host reboot, works 30s later | tailscaled reconnecting WireGuard (5-30s); loopback up immediately -- wait 30s |
+| `/api/identity` returns `{"user":"local"}` from tailnet device | Hitting direct loopback OR device is tagged (no `Tailscale-User-Login`) -- use the tailnet hostname from a user-account device |
 
-**Symptom:** Browser on the phone or travel laptop shows CORS errors; API requests fail while the SPA loads.
+**Stopping Tailscale later:** `nssm set CaseCalendar AppEnvironmentExtra "TZ=America/Los_Angeles" "NODE_ENV=production"; nssm restart CaseCalendar; tailscale serve off`.
 
-**Cause:** `TAILSCALE_HOSTNAME` is not set, is set to a wrong value (e.g. includes `http://` prefix or a port number), or the service was not restarted after the env var change.
-
-**Fix:**
-
-```powershell
-# Confirm the current value
-nssm get CaseCalendar AppEnvironmentExtra
-# Expected: three entries including TAILSCALE_HOSTNAME=<hostname-only>
-
-# If correct format but service wasn't restarted:
-nssm restart CaseCalendar
-```
-
-Check the format: hostname only, no `http://`, no port, no slash. If the format was wrong, correct the `TAILSCALE_HOSTNAME` value and restart.
-
-#### Not reachable immediately after Windows reboot
-
-**Symptom:** Phone can't reach the app right after the host reboots, but can reach it 30 seconds later.
-
-**Cause:** tailscaled must reconnect the WireGuard tunnel and validate the node key before Tailscale Serve becomes active. This takes 5–30 seconds after boot depending on network speed. The NSSM service starts independently and is available on direct loopback (`127.0.0.1:3747`) immediately.
-
-**Fix:** Wait 30 seconds and retry from the phone.
-
-#### `/api/identity` returns `{"user":"local"}` from the tailnet device
-
-**Symptom:** Visiting `/api/identity` from the phone returns `{"user":"local"}` instead of your email.
-
-**Cause:** Either the request is going through direct loopback (e.g. you opened `http://127.0.0.1:3747` from the host browser instead of the tailnet hostname URL), or your device is tagged (non-person device) in your tailnet. Tagged devices do not receive `Tailscale-User-Login` header injection.
-
-**Fix:** Use the tailnet hostname URL from a user-account device, not the direct loopback address. If the device is tagged, this is expected behavior.
-
-#### Stopping using Tailscale later
-
-When removing Tailscale, also remove `TAILSCALE_HOSTNAME` from `AppEnvironmentExtra` and restart the service:
-
-```powershell
-nssm set CaseCalendar AppEnvironmentExtra "TZ=America/Los_Angeles" "NODE_ENV=production"
-nssm restart CaseCalendar
-tailscale serve off
-```
-
-The stale `TAILSCALE_HOSTNAME` entry has near-zero practical risk (the CORS allowlist simply includes an unreachable origin), but cleanliness matters.
-
-To check or disable Tailscale Serve at any time: `tailscale serve status` to confirm the proxy is active; `tailscale serve off` to disable.
-
-*Throughout this entire setup, the Hono server bind remains `127.0.0.1:3747`. Tailscale Serve is the only inbound network surface for tailnet traffic, and it forwards to the same loopback address.*
+*Hono bind stays `127.0.0.1:3747`. Tailscale Serve is the only inbound network surface for tailnet traffic.*
 
 ---
 
 ## Desktop Wallpaper (Phase 9)
 
-Your Windows desktop wallpaper auto-regenerates from the deadline view every 30 minutes and within about 10 seconds of any deadline change. Screenshots are taken at 7680×2160 via Playwright headless Chromium and applied via the IDesktopWallpaper COM interface.
+Wallpaper auto-regenerates from the deadline view every 30 minutes and within ~10s of any deadline change. 7680x2160 screenshots via Playwright headless Chromium, applied via the IDesktopWallpaper COM interface.
 
 ### Overview
 
-The wallpaper pipeline is fully in-process inside the NSSM service:
+In-process in the NSSM service:
 
-- A `node-cron` job fires every 30 minutes (`*/30 * * * *`) to take a fresh screenshot.
-- Any deadline create/update/delete/type-change triggers a trailing-edge 10-second debounce that takes a screenshot within ~10s of the last change.
-- Screenshots are written to `data/wallpaper-*.png` (gitignored per OPS-05; last 10 retained).
-- On Windows, the latest PNG is applied via `scripts/wallpaper-set.ps1` using `IDesktopWallpaper::SetWallpaper($null, $path)` — `$null` monitor ID means all monitors.
-- The worker fetches `http://127.0.0.1:3747/wallpaper?t=<unix-ms>` over loopback only (SAFE-07 preserved).
-
----
+- **Off by default.** The worker only runs when `WALLPAPER_ENABLED=true` in `.env.local`. With the default `.env.example` value of `false`, nothing below executes. See [Enabling](#desktop-wallpaper-phase-9----enabling).
+- `node-cron` every 30 minutes (`*/30 * * * *`); any deadline change triggers a trailing-edge 10s debounce.
+- Screenshots in `data/wallpaper-*.png` (gitignored per OPS-05; last 10 retained). Applied via `scripts/wallpaper-set.ps1` using `IDesktopWallpaper::SetWallpaper($null, $path)` (`$null` = all monitors).
+- Worker fetches `http://127.0.0.1:3747/wallpaper?t=<unix-ms>` over loopback (SAFE-07 preserved).
 
 ### Install Playwright Chromium
 
-This step is **not** run automatically by `npm install`. Run it once after cloning and after every `npx playwright install` command:
-
-```powershell
-npx playwright install chromium
-```
-
-If Playwright Chromium fails to launch (e.g. missing OS dependencies on a fresh Windows install), run:
-
-```powershell
-npx playwright install --with-deps chromium
-```
+`setup.ps1` Step 6 installs Chromium when `WALLPAPER_ENABLED=true`; disabled (default) prints `Wallpaper disabled (set WALLPAPER_ENABLED=true in .env.local to enable)` and skips. Manual: `npx playwright install chromium` (add `--with-deps` if launch fails). Cache: `%USERPROFILE%\AppData\Local\ms-playwright` (~120 MB).
 
 ---
 
-### NSSM Session 0 Fix
+### NSSM Session 0 Fix (only when WALLPAPER_ENABLED=true)
 
-**This is required for wallpaper apply to work.** Without it, the service runs as LocalSystem in Windows Session 0, and `IDesktopWallpaper::SetWallpaper` silently fails.
+Only relevant when `WALLPAPER_ENABLED=true`. With wallpaper disabled (default), NSSM as LocalSystem is recommended -- no password, no Session 1 requirement.
 
-**Why Session 0 blocks wallpaper apply:** Windows Vista+ isolates services in Session 0, a non-interactive session with no visible desktop. The interactive user runs in Session 1. `IDesktopWallpaper` changes the wallpaper for the calling process's session — when called from Session 0, it either returns an HRESULT error or changes a wallpaper the user never sees. The "Allow service to interact with desktop" checkbox was removed in Windows 10 1803+.
-
-**Recommended install command (run as Administrator):**
+**Why Session 0 blocks wallpaper apply:** Windows Vista+ isolates services in Session 0 (no visible desktop); the interactive user runs in Session 1. `IDesktopWallpaper` changes wallpaper for the caller's session; from Session 0 it returns HRESULT error or changes an invisible wallpaper. (The "Allow service to interact with desktop" checkbox was removed in Windows 10 1803+.)
 
 ```powershell
+# Default (LocalSystem, no stored password):
+pwsh -ExecutionPolicy Bypass -File .\scripts\nssm-install.ps1
+# Under your user (only needed for wallpaper apply):
 pwsh -ExecutionPolicy Bypass -File .\scripts\nssm-install.ps1 -LogonUser '.\<your-username>'
 ```
 
-The script will prompt for your Windows password. The password is stored encrypted by NSSM via Windows DPAPI (not in plaintext).
+`-LogonUser` prompts for your Windows password (NSSM stores it encrypted via DPAPI); **requires a real local Windows password** -- PIN/Microsoft Account sign-ins do not have one (use [Task Scheduler Alternative](#task-scheduler-alternative-no-stored-password)).
 
-**Verify the service account was set:**
+Verify: `Get-WmiObject Win32_Service -Filter "Name='CaseCalendar'" | Select-Object StartName`.
 
-```powershell
-Get-WmiObject Win32_Service -Filter "Name='CaseCalendar'" | Select-Object StartName
-```
-
-Expected output: `.\<your-username>` (NOT `LocalSystem`).
-
-**Symptom table:**
-
-| Symptom | Root Cause | Fix |
-|---------|------------|-----|
-| Wallpaper never changes despite cron ticks in logs | Service running as LocalSystem in Session 0 | Re-run `nssm-install.ps1 -LogonUser '.\<username>'` |
-| PS1 exits with HRESULT 0x80070005 (E_ACCESSDENIED) | Session 0 IDesktopWallpaper access denied | Same fix as above |
-
-See the Task Scheduler alternative below if you prefer not to store your password in the NSSM service config.
+| Symptom | Cause / Fix |
+|---------|-------------|
+| SERVICE_RUNNING, `Win+D` shows old wallpaper, PNGs piling up in `data/` | Wallpaper enabled, service as LocalSystem in Session 0 -- set `WALLPAPER_ENABLED=false`, OR `-LogonUser`, OR Task Scheduler |
+| `wallpaper-set.ps1` HRESULT 0x80070005 (E_ACCESSDENIED) | Session 0 access denied -- same options |
+| Log: `wallpaper disabled (set WALLPAPER_ENABLED=true in .env.local)` | Worker gated off (default) -- see [Enabling](#desktop-wallpaper-phase-9----enabling) |
 
 ---
 
 ### Task Scheduler Alternative (no stored password)
 
-If you do not want NSSM to hold your Windows password, keep NSSM running as LocalSystem. The worker still generates the PNG in `data/`. Use a Windows Task Scheduler entry to apply it under your user account at logon.
+**When to use:** PIN/Microsoft Account sign-in (no local password for NSSM), OR you do not want a service holding a credential. Also the easiest way to enable Phase 9 wallpaper -- server inherits Session 1 from your interactive logon. Task Scheduler runs `npm run start` under your user at logon (Session 1); sign out stops it, sign back in auto-restarts. No service, no stored password, no Session 0 problem. **Trade-off:** only runs while signed in (NSSM starts at boot before login); for a single-user lawyer's machine, usually fine.
 
-**Trade-off:** The Task Scheduler path adds a second process; the NSSM ObjectName path is simpler and recommended. The Task Scheduler path requires a small wrapper script you write yourself (see below).
+**Install (ordinary PowerShell, no Administrator required):**
 
-**How it works:**
+```powershell
+$ProjectRoot = "C:\apps\case-calendar"
+$Action = New-ScheduledTaskAction `
+  -Execute "cmd.exe" `
+  -Argument "/c npm run start >> logs\case-calendar.log 2>&1" `
+  -WorkingDirectory $ProjectRoot
+$Trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+$Principal = New-ScheduledTaskPrincipal `
+  -UserId "$env:USERDOMAIN\$env:USERNAME" `
+  -LogonType Interactive `
+  -RunLevel Limited
+$Settings = New-ScheduledTaskSettingsSet `
+  -AllowStartIfOnBatteries `
+  -DontStopIfGoingOnBatteries `
+  -StartWhenAvailable
+Register-ScheduledTask `
+  -TaskName "CaseCalendar" `
+  -Action $Action `
+  -Trigger $Trigger `
+  -Principal $Principal `
+  -Settings $Settings
+```
 
-1. Keep NSSM as LocalSystem (no `-LogonUser` needed — the worker generates PNGs but apply is skipped).
-2. Create a Task Scheduler entry:
-   - **Trigger:** At log on of `<your user>`
-   - **Action:** `pwsh -NoProfile -WindowStyle Hidden -File C:\apps\case-calendar\scripts\wallpaper-watch.ps1`
-3. The wrapper script (`wallpaper-watch.ps1`) polls `data\wallpaper-*.png` for the newest file every 30 seconds and calls `scripts\wallpaper-set.ps1 -Path <newest>`.
+**Test:** `Start-ScheduledTask -TaskName "CaseCalendar"`; wait ~3s; `netstat -ano | findstr 3747` (expect `127.0.0.1:3747 LISTENING`); open `http://127.0.0.1:3747`. **Verify auto-restart:** sign out, sign back in, wait ~10s, re-run `netstat`.
 
-> **Note:** `wallpaper-watch.ps1` is a DIY script not shipped in this repo. The NSSM ObjectName path (`-LogonUser`) is the supported, recommended deployment for wallpaper apply.
+**Stop/remove:** `Stop-ScheduledTask -TaskName "CaseCalendar"; Unregister-ScheduledTask -TaskName "CaseCalendar" -Confirm:$false`.
+
+**Bonus -- Phase 9 wallpaper for free:** with `WALLPAPER_ENABLED=true`, the wallpaper worker runs in the Task Scheduler process (Session 1), so `IDesktopWallpaper::SetWallpaper` reaches the real desktop -- no NSSM `-LogonUser` needed.
+
+**If NSSM was previously installed:** `nssm stop CaseCalendar; nssm remove CaseCalendar confirm` first to avoid two copies fighting over port 3747.
+
+---
+
+### Desktop Wallpaper (Phase 9) -- Enabling
+
+The worker is **off by default**. Boot gate in `src/server/index.ts` around line 109:
+
+```ts
+if (process.env.WALLPAPER_ENABLED === 'true') {
+  startWallpaperWorker()
+} else {
+  logger.info('wallpaper disabled (set WALLPAPER_ENABLED=true in .env.local)')
+}
+```
+
+`.env.example` ships `WALLPAPER_ENABLED=false` -- no Playwright, no PNGs, no PowerShell, no Session 0 problem.
+
+**To enable:** (1) set `WALLPAPER_ENABLED=true` in `.env.local`; (2) re-run `.\scripts\setup.ps1` (Step 6 downloads Chromium, ~120 MB) or `npx playwright install chromium`; (3) choose a Session 1+ deployment -- **(a)** reinstall NSSM with `-LogonUser '.\<your-username>'` (needs a real local Windows password -- see [NSSM Session 0 Fix](#nssm-session-0-fix-only-when-wallpaper_enabledtrue)), OR **(b)** switch to the [Task Scheduler Alternative](#task-scheduler-alternative-no-stored-password); (4) restart -- NSSM: `nssm restart CaseCalendar`; Task Scheduler: stop+start the task; (5) tail the log (should NOT show `wallpaper disabled`); confirm pipeline with `npm run wallpaper:once`.
+
+**To disable later:** set `WALLPAPER_ENABLED=false`, restart. PNGs in `data/` stay (gitignored). `npx playwright uninstall chromium` reclaims ~120 MB.
+
+**Symptom -- enabled but log shows `wallpaper disabled`:** stale NSSM env -- restart; `nssm get CaseCalendar AppEnvironmentExtra`. **Symptom -- PNGs in `data/` but desktop unchanged:** server in Session 0 (LocalSystem). Use option (a) or (b).
 
 ---
 
 ### DPI Scaling
 
-For the sharpest wallpaper text on the 57" Odyssey Neo G9 (7680×2160 native), set Windows display scaling to **100%**.
+For the sharpest wallpaper text on the 57" Odyssey Neo G9 (7680x2160 native), set Windows display scaling to **100%**.
 
 - At **100% scaling**: 1 logical pixel = 1 physical pixel. Playwright's `deviceScaleFactor: 1` matches Windows exactly. Text renders at full native resolution with no resampling.
-- At **125% scaling**: Windows considers the logical desktop to be 6144×1728 (7680÷1.25). It downsamples the 7680×2160 PNG to fill the logical desktop — no distortion, no black bars, edge-to-edge display. However, text appears approximately 20% smaller relative to screen height.
+- At **125% scaling**: Windows considers the logical desktop to be 6144x1728 (7680/1.25). It downsamples the 7680x2160 PNG to fill the logical desktop -- no distortion, no black bars, edge-to-edge display. However, text appears approximately 20% smaller relative to screen height.
 
 This is a cosmetic preference, not a correctness issue. The PNG will display edge-to-edge at either setting. If you prefer larger text at 125% scaling, increase the CSS font sizes in `src/client/routes/wallpaper.tsx` by ~25%.
 
@@ -365,8 +285,8 @@ This is a cosmetic preference, not a correctness issue. The PNG will display edg
 
 - PNGs are written to `data/wallpaper-{ISO-timestamp}.png` where timestamp is `YYYY-MM-DDTHH-mm-ssZ` (Windows-safe: colons replaced with hyphens for NTFS compatibility).
 - The last **10** files are retained; older PNGs are pruned after each screenshot run.
-- The `data/` directory is gitignored (per OPS-05) — PNGs never enter version control.
-- Approximate size: 3–8 MB per PNG → maximum ~80 MB on disk.
+- The `data/` directory is gitignored (per OPS-05) -- PNGs never enter version control.
+- Approximate size: 3-8 MB per PNG -> maximum ~80 MB on disk.
 
 ---
 
@@ -378,9 +298,9 @@ Use this to verify the full pipeline (screenshot + prune + apply) without waitin
 npm run wallpaper:once
 ```
 
-**Requirement:** The Hono server must be running (via NSSM or `npm run dev:server`) on `127.0.0.1:3747` — the worker fetches the `/wallpaper` route over loopback.
+**Requirement:** The Hono server must be running (via NSSM or `npm run dev:server`) on `127.0.0.1:3747` -- the worker fetches the `/wallpaper` route over loopback.
 
-**What it does:** Launches Playwright, takes one screenshot at 7680×2160, prunes old files (keeps newest 10), applies the PNG on Windows via `wallpaper-set.ps1`, then exits.
+**What it does:** Launches Playwright, takes one screenshot at 7680x2160, prunes old files (keeps newest 10), applies the PNG on Windows via `wallpaper-set.ps1`, then exits.
 
 ---
 
@@ -390,228 +310,111 @@ npm run wallpaper:once
 |----------|---------------|
 | Playwright Chromium | ~50 MB resident in the node process tree (persistent browser) |
 | PowerShell (wallpaper apply) | Short-lived (<1 second per apply), ~30 MB peak |
-| Disk | Up to ~80 MB for 10 retained PNGs (3–8 MB each) |
-| CPU (cron schedule only) | Negligible — fires every 30 minutes |
+| Disk | Up to ~80 MB for 10 retained PNGs (3-8 MB each) |
+| CPU (cron schedule only) | Negligible -- fires every 30 minutes |
 
 ---
 
 ### Troubleshooting
 
-#### PNGs appear in `data/` but Win+D shows the old wallpaper
-
-**Cause:** Service running as LocalSystem (Session 0) — `IDesktopWallpaper` silently no-ops.
-
-**Fix:** Re-run `nssm-install.ps1` with `-LogonUser '.\<username>'` (see NSSM Session 0 Fix above), or set up the Task Scheduler alternative.
-
-To set ObjectName without re-running the full install (existing service only):
-
-```powershell
-nssm set $ServiceName ObjectName .\<username>
-nssm restart CaseCalendar
-```
-
-#### Worker log shows `wallpaper: browser launch failed at startup`
-
-**Cause:** Playwright Chromium binary not installed.
-
-**Fix:**
-
-```powershell
-npx playwright install --with-deps chromium
-```
-
-#### Worker log shows `wallpaper: screenshot failed` with `TimeoutError: navigation`
-
-**Cause:** Hono server not yet listening on port 3747 when the worker attempted to fetch `/wallpaper` (race during NSSM service restart).
-
-**Fix:** Self-corrects on the next cron tick (within 30 minutes) or on the next deadline mutation. If the error persists:
-
-```powershell
-nssm status CaseCalendar
-netstat -ano | findstr 3747
-```
+| Symptom | Cause / Fix |
+|---------|-------------|
+| PNGs in `data/` but `Win+D` shows old wallpaper | LocalSystem (Session 0) -- `IDesktopWallpaper` silently no-ops. Re-run with `-LogonUser` or use Task Scheduler. Quick fix: `nssm set CaseCalendar ObjectName .\<username>; nssm restart CaseCalendar` |
+| `wallpaper: browser launch failed at startup` | Chromium binary not installed -- `npx playwright install --with-deps chromium` |
+| `wallpaper: screenshot failed` with `TimeoutError: navigation` | Hono not listening on 3747 when worker tried to fetch (race during restart). Self-corrects on next cron tick or deadline mutation. If persistent: `nssm status CaseCalendar; netstat -ano | findstr 3747` |
 
 ---
 
 ## Email Digest (Phase 10)
 
-A daily 7:00 AM email digest delivers the next 14 days of deadlines (plus overdue items capped at the 30 most recent) as a plain-text and HTML multipart email. The worker reads SMTP credentials from `.env.local` and only runs when `EMAIL_DIGEST_ENABLED=true`. If that variable is absent or set to anything other than `'true'`, the scheduler no-ops silently — preserving SAFE-09 by default. Use `npm run email:once` to trigger an immediate manual send for testing.
-
-### Overview
-
-- Daily 7:00 AM LA-time cron via `node-cron` (same scheduler as the wallpaper worker)
-- Digest scope: next 14 days of upcoming deadlines + overdue items capped at 30 most recent
-- Format: plain-text + HTML multipart — renders cleanly in Outlook, Apple Mail, and terminal mail readers
-- SMTP credentials come from `.env.local` (gitignored) — never committed to the repo
-- `EMAIL_DIGEST_ENABLED=true` is the opt-in gate; the worker no-ops when absent (SAFE-09 preserved)
-- `npm run email:once` sends a single digest immediately without scheduling the cron
+Daily 7:00 AM LA-time digest: next 14 days + overdue (capped at 30 most recent), plain-text + HTML multipart. Reads SMTP creds from `.env.local`; only runs when `EMAIL_DIGEST_ENABLED=true` (else no-ops silently, preserving SAFE-09). `npm run email:once` for one-shot testing.
 
 ### Configure SMTP
 
-1. Copy `.env.example` to `.env.local` at the project root.
-2. Fill in all seven variables (see table below).
-3. Restart the NSSM service: `nssm restart CaseCalendar`
+Copy `.env.example` -> `.env.local`, fill in the seven vars, `nssm restart CaseCalendar`.
 
-**Environment variables:**
+| Var | Description |
+|-----|-------------|
+| `SMTP_HOST` | e.g. `smtp.gmail.com` |
+| `SMTP_PORT` | `587` STARTTLS (recommended) or `465` SMTPS |
+| `SMTP_USER` | usually your email |
+| `SMTP_PASS` | Gmail: App Password (16 chars) |
+| `SMTP_FROM` | e.g. `Case Calendar <you@gmail.com>` |
+| `SMTP_TO` | recipient |
+| `EMAIL_DIGEST_ENABLED` | `true` to enable daily 7am cron |
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `SMTP_HOST` | Yes | SMTP server hostname (e.g. `smtp.gmail.com`) |
-| `SMTP_PORT` | Yes | SMTP port: `587` for STARTTLS (recommended) or `465` for SMTPS |
-| `SMTP_USER` | Yes | SMTP account username (usually your email address) |
-| `SMTP_PASS` | Yes | SMTP password — for Gmail, use an App Password (16 chars, 4 groups of 4) |
-| `SMTP_FROM` | Yes | Display From header (e.g. `Case Calendar <you@gmail.com>`) |
-| `SMTP_TO` | Yes | Recipient email address (the lawyer's inbox) |
-| `EMAIL_DIGEST_ENABLED` | Yes | Set to `true` to enable the daily 7am cron (default: no-op) |
+TLS auto-selected: 587 -> STARTTLS (`secure: false` + `requireTLS: true`); 465 -> SMTPS (`secure: true`).
 
-**TLS port selection:**
+**Gmail App Password** ("Less Secure Apps" removed Sept 2024): enable 2-Step Verification at https://accounts.google.com/security; same page -> **App passwords** -> **Mail** + **Other (Custom name)** -> `Case Calendar` -> **Generate**; paste into `SMTP_PASS` (spaces optional). Other providers (SendGrid, Postmark, Mailgun, AWS SES, self-hosted Postfix) work the same way.
 
-| Port | Mode | Config | Notes |
-|------|------|--------|-------|
-| `587` | STARTTLS | `secure: false` + `requireTLS: true` | Gmail default; upgrades plain connection to TLS |
-| `465` | SMTPS | `secure: true` | TLS from the first byte; some providers prefer this |
-
-The worker selects the correct TLS mode automatically based on `SMTP_PORT`.
-
-### Gmail Setup (App Password)
-
-> **"Less Secure Apps" was removed by Google in September 2024.** Do not follow any tutorial that instructs you to enable it — that option no longer exists. App Passwords are the only supported path for SMTP with Gmail.
-
-1. Enable **2-Step Verification** on your Google account (required before App Passwords become available).
-2. Go to [https://accounts.google.com/security](https://accounts.google.com/security) → **2-Step Verification** → **App passwords** (at the bottom of the page).
-3. Select **"Mail"** and **"Other (Custom name)"**, enter `Case Calendar`, then click **Generate**.
-4. Copy the 16-character password (shown as four groups of four characters, e.g. `abcd efgh ijkl mnop`).
-5. Paste it into `SMTP_PASS` in your `.env.local` (with or without spaces — Nodemailer accepts both).
-6. Set `SMTP_HOST=smtp.gmail.com` and `SMTP_PORT=587`.
-
-**Other SMTP providers:** SendGrid, Postmark, Mailgun, AWS SES, and self-hosted Postfix all work the same way — use the host, port, username, and API key/password from your provider's SMTP credential page.
-
-### Windows File Permissions for .env.local
-
-`.env.local` contains real SMTP credentials and should be readable only by your Windows user account:
-
-1. Right-click `.env.local` → **Properties** → **Security** tab.
-2. Click **Edit**, remove the `Users` group, keep only your own user account with **Read** permission.
-3. Click **OK** / **Apply**.
-
-The NSSM service must run as the same user to read the file (configured via `-LogonUser` in Phase 9). If the service runs as `LocalSystem`:
-- Either re-run `nssm-install.ps1 -LogonUser '.\<your-username>'` (recommended — same step as Phase 9 wallpaper setup).
-- Or grant `LocalSystem` read access to `.env.local` (less secure — LocalSystem is a highly-privileged account).
+**File permissions:** `.env.local` readable only by your user (right-click -> **Properties** -> **Security** -> **Edit** -> remove `Users`, keep your user with **Read**). NSSM must run as that same user (`-LogonUser '.\<your-username>'`), or grant `LocalSystem` read access (less secure).
 
 ### Manual Debug: email:once
 
-Use this to verify SMTP credentials and email delivery without waiting for the daily 7am cron:
-
-```powershell
-npm run email:once
-```
-
-**Requirements:**
-- `.env.local` must exist at the project root with all seven variables set.
-- `EMAIL_DIGEST_ENABLED=true` must be present.
-- SMTP server must be reachable. Test connectivity first:
-  ```powershell
-  Test-NetConnection smtp.gmail.com -Port 587
-  ```
-
-**Behavior:** Loads `.env.local`, validates all required vars, builds the digest HTML + plain-text, sends one email to `SMTP_TO`, then exits with code `0` on success or `1` on failure. The `--once` flag does NOT schedule the daily cron — it is a one-shot manual trigger only.
+`npm run email:once` -- requires `.env.local` with all seven vars + `EMAIL_DIGEST_ENABLED=true`; SMTP reachable (`Test-NetConnection smtp.gmail.com -Port 587`). Sends one email, exits `0`/`1`. Does NOT schedule the cron.
 
 ### Troubleshooting
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| Log: `email digest disabled (set EMAIL_DIGEST_ENABLED=true)` | `.env.local` does not exist or `EMAIL_DIGEST_ENABLED` is not set | Create `.env.local` from `.env.example` and set `EMAIL_DIGEST_ENABLED=true` |
-| Log: `email digest disabled (missing env vars: ...)` with a list | One or more required vars missing or misspelled | Check `.env.local` against `.env.example`; verify variable names match exactly |
-| Log: `email: SMTP verify failed` with `EAUTH` or `ENOAUTH` | Wrong SMTP credentials | Regenerate the Gmail App Password and update `SMTP_PASS` in `.env.local` |
-| Log: `email: SMTP verify failed` with `ECONNREFUSED` | Wrong host/port or firewall blocking | Run `Test-NetConnection $SMTP_HOST -Port $SMTP_PORT` to verify connectivity; check Windows Firewall rules |
-| Log: `email: SMTP verify failed` with `ESOCKET` or `ETIMEDOUT` | SMTP server slow or unreachable | Retry; if persistent, contact your SMTP provider |
-| `npm run email:once` exits 1 with `ENOENT .env.local` | Not running from the project root | `cd C:\apps\case-calendar` then re-run |
-| Email never arrives, no errors in logs | Wrong `SMTP_TO` address, or provider spam-filtered the message | Check spam/junk folder; check provider outbound send log |
-| Two emails arrive at 7am | `noOverlap` disabled or duplicate NSSM service registered | Verify only one `CaseCalendar` service exists: `nssm status CaseCalendar` |
+| Symptom | Cause / Fix |
+|---------|-------------|
+| `email digest disabled (set EMAIL_DIGEST_ENABLED=true)` | Var unset -- set it |
+| `email digest disabled (missing env vars: ...)` | Var missing -- check `.env.example` |
+| `email: SMTP verify failed` `EAUTH`/`ENOAUTH` | Wrong credentials -- regenerate App Password |
+| `email: SMTP verify failed` `ECONNREFUSED` | Wrong host/port or firewall -- `Test-NetConnection $SMTP_HOST -Port $SMTP_PORT` |
+| `email: SMTP verify failed` `ESOCKET`/`ETIMEDOUT` | Slow server -- retry; contact provider |
+| `email:once` exits 1 `ENOENT .env.local` | `cd C:\apps\case-calendar` |
+| Email never arrives, no errors | Wrong `SMTP_TO` or spam-filtered |
+| Two emails at 7am | Duplicate service -- `nssm status CaseCalendar` |
 
-**After any change to `.env.local`, restart the NSSM service:**
-
-```powershell
-nssm restart CaseCalendar
-```
-
-### Resource Usage
-
-- ~5 MB resident for the Nodemailer SMTP transport (held in the Node process)
-- No disk attachments — HTML + plain-text inline only
-- One SMTP connection per day at 7:00 AM LA-time; connection closed immediately after send
+After any `.env.local` change: `nssm restart CaseCalendar`. **Resource usage:** ~5 MB Nodemailer; one SMTP connection/day.
 
 ---
 
 ## NL Quick-Add (Phase 11)
 
-Press Cmd+K (Ctrl+K on Windows), type "Smith deposition June 15" or similar free-text, press Enter, and the new-deadline form opens prefilled with case, type, date, and description — ready to review and save. Powered by Anthropic Claude. **Optional** — Cmd+K still opens without the key set, but Enter shows "NL parser disabled."
+Cmd+K (Ctrl+K on Windows), type "Smith deposition June 15", Enter -- the new-deadline form opens prefilled. Anthropic Claude. **Optional** -- Cmd+K opens without the key, Enter shows "NL parser disabled."
 
-### Overview
-
-- **Provider:** Anthropic Claude (`claude-sonnet-4-6`) via `@anthropic-ai/sdk`
-- **Endpoint:** `POST /api/deadlines/parse` (server-side proxy; API key never leaves the host)
-- **Cost:** approximately $0.0000035 per parse (≈ $0.35 per 100,000 parses) — see Anthropic pricing
-- **Privacy:** Only the user-typed free text is sent. Stored deadlines, case labels, and the types table are NOT transmitted. NL parsing is the one deliberate exception to the local-only data policy (see .planning/PROJECT.md Key Decisions).
-- **Safety (NL-03):** Parsed values pre-fill the new-deadline form. The user MUST click Save to confirm — the LLM result is never auto-saved (malpractice risk: LLM date hallucinations).
+- **Provider:** Anthropic Claude (`claude-sonnet-4-6`) via `@anthropic-ai/sdk`. **Endpoint:** `POST /api/deadlines/parse` (server-side proxy; API key stays on host).
+- **Cost:** ~$0.0000035/parse (~$0.35/100K).
+- **Privacy:** only the user-typed text is sent. Stored deadlines, case labels, and types table are NOT transmitted. NL parsing is the one deliberate exception to the local-only policy (see `.planning/PROJECT.md`).
+- **Safety (NL-03):** parsed values pre-fill the form; user MUST click Save -- LLM result never auto-saved (malpractice risk: date hallucinations).
 
 ### Configure ANTHROPIC_API_KEY
 
-1. Get an API key from https://console.anthropic.com → Settings → API Keys → Create Key. Copy the `sk-ant-...` value.
-2. Add it to your `.env.local` (create from `.env.example` if needed):
-   ```
-   ANTHROPIC_API_KEY=sk-ant-...your-key-here...
-   ```
-3. Restart the Case Calendar server (or NSSM service) so the env var is picked up:
-   ```powershell
-   nssm restart CaseCalendar
-   ```
-4. Verify: open the app, press Cmd+K, type a deadline, press Enter. The form should open prefilled within ~2 seconds.
+1. https://console.anthropic.com -> Settings -> API Keys -> Create Key. Copy `sk-ant-...`.
+2. Add `ANTHROPIC_API_KEY=sk-ant-...` to `.env.local`. `nssm restart CaseCalendar`.
+3. Verify: Cmd+K, type, Enter -- form opens prefilled in ~2s.
 
-### Skipping This Feature
-
-If you do not want NL parsing, simply leave `ANTHROPIC_API_KEY` unset (or omit the line from `.env.local`). Cmd+K still opens; pressing Enter shows the message "NL parser disabled — see docs/DEPLOYMENT.md#nl-quick-add-phase-11". The rest of the app is fully functional.
+Leave unset to skip; Cmd+K still opens, Enter shows "NL parser disabled".
 
 ### Manual Debug: parse:once
 
-For prompt tuning, run a one-shot parse from the command line:
 ```powershell
 npm run parse:once -- "Smith deposition June 15"
 ```
-This prints the parsed JSON (caseLabel, typeId, date, description) to stdout. Useful when adjusting the system prompt in `src/server/lib/nl-parser.ts` to test the change against representative inputs before redeploying.
 
-### Cost Tracking
-
-The parse route logs token usage via pino structured logs (`inputTokens`, `outputTokens`) on every successful parse. For real-world cost monitoring, check the Anthropic console at https://console.anthropic.com/usage (filter by API key). Expect ~$0.00035 per 100 parses (≈ $0.35 per 100,000 parses) based on the 50-character typical input; actual cost depends on prompt length and type-list size.
-
-### Privacy Note
-
-The system prompt and tool schema include the names of your deadline types (Filing, Hearing, Deposition, etc.) so the LLM can map free-text to a typeId. Type names are considered non-private metadata. If you have renamed types to include client-identifying information, those names will be transmitted to Anthropic when NL parsing is invoked — adjust accordingly.
+Prints parsed JSON. Useful for tuning `src/server/lib/nl-parser.ts`. **Cost tracking:** route logs `inputTokens`/`outputTokens` via pino (https://console.anthropic.com/usage). **Privacy:** prompt includes deadline type names so the LLM can map text to a typeId. If you renamed types with client-identifying info, those names will be transmitted -- adjust accordingly.
 
 ### Troubleshooting
 
-- **"NL parser disabled" message on Enter** — `ANTHROPIC_API_KEY` is unset or empty in `.env.local`. Add the key and restart.
-- **"Parser timed out" message** — Anthropic API took longer than 10 seconds; usually transient. Retry. The SDK is configured with `maxRetries: 0` so the user controls retry timing.
-- **"Couldn't parse — try rewording" message** — LLM returned a malformed result (invalid date format, missing required field). Try a clearer input: include the case name, deadline type, and a date.
-- **High costs in Anthropic dashboard** — Check that the app is not invoking parse repeatedly. The route caps text at 500 chars per request and the SDK has `maxRetries: 0`. If costs grow, audit the logs for unexpected `nl-parse: route success` lines.
+- **"NL parser disabled" on Enter** -- key unset/empty. Add, restart.
+- **"Parser timed out"** -- Anthropic API >10s; transient. SDK uses `maxRetries: 0`.
+- **"Couldn't parse -- try rewording"** -- malformed LLM result. Include case name, type, date.
+- **High costs** -- audit logs for unexpected `nl-parse: route success`. Route caps text at 500 chars.
 
-### Resource Usage
-
-- ~3 MB resident in the Node process for the Anthropic SDK client (held only when first parse fires; not at server startup)
-- One outbound HTTPS connection per Cmd+K Enter press; closed immediately after response
-- No background jobs; no cron schedule (unlike Phase 9 wallpaper / Phase 10 email)
+**Resource usage:** ~3 MB Anthropic SDK (after first parse); one outbound HTTPS per Cmd+K Enter; no background jobs.
 
 ---
 
 ## SAFE Checklist Summary
 
-Every SAFE requirement has an automated proof test. Run `cross-env TZ=America/Los_Angeles npm test` to confirm all pass.
+Each SAFE has an automated proof. Run `cross-env TZ=America/Los_Angeles npm test`.
 
 | ID | Description | Proof |
 |----|-------------|-------|
 | SAFE-01 | Date round-trip across US timezones | src/server/tz.test.ts |
 | SAFE-02 | DST boundary correctness | src/server/tz.test.ts |
-| SAFE-03 | No raw new Date(string) outside date util | tests/date-guard.test.ts |
+| SAFE-03 | No raw `new Date(string)` outside date util | tests/date-guard.test.ts |
 | SAFE-04 | SQLite PRAGMA on startup (WAL + foreign_keys) | src/server/db.test.ts |
 | SAFE-05 | VACUUM INTO backup + 30-day retention | src/server/backup.test.ts |
 | SAFE-06 | Persistent error banner on 500 | src/client/App.crud.test.tsx |
@@ -620,4 +423,4 @@ Every SAFE requirement has an automated proof test. Run `cross-env TZ=America/Lo
 | SAFE-09 | No external network in src/client | tests/safe-09-no-external-network.test.ts |
 | SAFE-10 | req.user middleware placeholder | src/server/user-middleware.test.ts |
 
-For the full Windows smoke acceptance procedure (OPS-04 reboot test, per-timezone SAFE-01/02 runs, SAFE-05/06 manual checks), see Task 6 of `.planning/phases/06-safety-hardening-windows-service/06-04-PLAN.md`.
+Full Windows smoke acceptance: Task 6 of `.planning/phases/06-safety-hardening-windows-service/06-04-PLAN.md`.
