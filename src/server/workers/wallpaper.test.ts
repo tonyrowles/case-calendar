@@ -367,6 +367,27 @@ describe('WALL-05: trailing-edge debounce', () => {
     expect(screenshotMock).toHaveBeenCalledOnce()
   })
 
+  it('T11b: startWallpaperWorker renders once at startup (no 30-min wait after a restart)', async () => {
+    const screenshotMock = vi.fn().mockResolvedValue(undefined)
+    ;(chromium.launch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      newContext: vi.fn().mockResolvedValue({
+        newPage: vi.fn().mockResolvedValue({
+          goto: vi.fn().mockResolvedValue(undefined),
+          waitForTimeout: vi.fn().mockResolvedValue(undefined),
+          screenshot: screenshotMock,
+          close: vi.fn().mockResolvedValue(undefined),
+        }),
+        close: vi.fn().mockResolvedValue(undefined),
+      }),
+      close: vi.fn().mockResolvedValue(undefined),
+    })
+
+    wp.startWallpaperWorker()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(screenshotMock).toHaveBeenCalledOnce()
+  })
+
   it('T12: startWallpaperWorker registers a subscriber via onMutation', () => {
     wp.startWallpaperWorker()
 

@@ -213,10 +213,12 @@ export function startWallpaperWorker(): void {
     return
   }
 
-  // Launch persistent browser (fire-and-forget; log on failure)
-  launchBrowser().catch((err) =>
-    logger.error({ err }, 'wallpaper: browser launch failed at startup')
-  )
+  // Launch persistent browser, then render once so a (re)started server refreshes the
+  // wallpaper immediately instead of waiting up to 30 min for the first cron tick.
+  // Called from serve()'s listening callback, so /wallpaper is already reachable.
+  launchBrowser()
+    .then(() => generateAndApplyWallpaper())
+    .catch((err) => logger.error({ err }, 'wallpaper: browser launch failed at startup'))
 
   // Register 30-minute cron task (WALL-04)
   cronTask = cron.schedule(

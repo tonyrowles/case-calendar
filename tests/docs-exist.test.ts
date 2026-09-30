@@ -103,6 +103,41 @@ const DOCS: DocSpec[] = [
     ],
   },
   {
+    path: 'scripts/tray.ps1',
+    anchors: [
+      'Local\\CaseCalendarTray',   // single-instance mutex
+      'CreateNoWindow = $true',    // server runs with no console window
+      '/T /F',                     // stop kills the whole cmd -> node tree
+      '$MaxCrashesInWindow',       // crash watchdog gives up instead of looping
+      'update.ps1',
+    ],
+  },
+  {
+    path: 'scripts/update.ps1',
+    anchors: [
+      'git pull --ff-only',
+      'status --porcelain --untracked-files=no',  // refuses to clobber local edits
+      'git reset --hard $oldHead',                 // rollback on failure
+      'pre-update-',                               // DB backup before schema push
+    ],
+  },
+  {
+    path: 'scripts/install-tray.ps1',
+    anchors: [
+      'ExecutionTimeLimit ([TimeSpan]::Zero)',     // default 72h limit would kill the server
+      '-WindowStyle Hidden',
+      'tray.ps1',
+      '-Uninstall',
+    ],
+  },
+  {
+    path: 'docs/DEPLOYMENT.md',
+    anchors: [
+      'install-tray.ps1',
+      'Do not rebuild while the server is running.',
+    ],
+  },
+  {
     path: '.env.example',
     anchors: [
       'SMTP_HOST',

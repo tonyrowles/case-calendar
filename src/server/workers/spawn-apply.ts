@@ -47,7 +47,8 @@ export async function spawnPowerShellApply(absolutePngPath: string): Promise<voi
   logger.info({ ps1: PS1_PATH, png: absolutePngPath }, 'wallpaper: spawning powershell apply')
 
   return new Promise<void>((resolve, reject) => {
-    const child = spawnImpl(POWERSHELL_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    // windowsHide: the server may run without a console (tray launcher); never flash a window
+    const child = spawnImpl(POWERSHELL_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
     let stderr = ''
     let stdout = ''
     child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8') })
