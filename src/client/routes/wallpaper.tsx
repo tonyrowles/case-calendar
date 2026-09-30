@@ -1,59 +1,173 @@
 import React, { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { format } from 'date-fns'
+import { addDays, format, startOfWeek } from 'date-fns'
 import { useSearchParams } from 'react-router-dom'
 import { Calendar as CalendarIcon } from 'lucide-react'
 
 import { getDeadlines } from '@/client/lib/api.js'
-import { toISODateString } from '@/shared/lib/date.js'
+import { parseLocalDate, toISODateString } from '@/shared/lib/date.js'
 import { groupByBucket } from '@/shared/lib/buckets.js'
 import { useTypeColors } from '@/client/hooks/useTypeColors.js'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
 
-// Inline WallpaperPill helper — sized for ~3-4 foot viewing distance at 7680×2160
-function WallpaperPill({ deadline, isOverdue, typesById, getColor }: {
-  deadline: Deadline
-  isOverdue: boolean
+// Layout: 7680×2160 canvas. Rolling multi-week calendar on the left (this week + the
+// next few), upcoming list on the right. Sized for ~3-4 foot viewing distance on a
+// 57" 32:9 display. No overdue treatment: the wallpaper is a glance view, not a task
+// list — past days are simply dimmed.
+const CANVAS_W = 7680
+const CANVAS_H = 2160
+// Empty strip on the left where Windows places desktop icons by default (column-major from top-left)
+const ICON_GUTTER = 480
+const LIST_W = 1400      // list pane sized to its content so spare width goes to the icon gutter
+const WEEK_STARTS_ON = 0 // Sunday — matches CalendarView firstDay={0} and weekBoundaries()
+const WEEKS_SHOWN = 5    // this week + 4
+const MAX_PER_CELL = 3   // calendar cell overflow → "+N more"
+// Rows that fit in the list pane at these font sizes (4 section headers + rows).
+// Shared across sections in order, so overflow is always an explicit "+N more", never clipped.
+const LIST_ROW_BUDGET = 14
+
+type ColorFns = {
   typesById: Map<number, DeadlineType>
   getColor: (id: number) => string
-}) {
+}
+
+/**
+ * Event title for display: the first non-empty line of the description
+ * (e.g. "Smith Deposition", "Rebuttal Reports Due"). Null when there is none.
+ */
+export function deadlineTitle(d: Pick<Deadline, 'description'>): string | null {
+  const first = d.description?.split(/\r?\n/).find(line => line.trim() !== '')
+  return first ? first.trim() : null
+}
+
+function formatIso(iso: string, pattern: string): string {
+  const d = parseLocalDate(iso)
+  return d ? format(d, pattern) : iso
+}
+
+// Title on top; type (colored) · case below. Without a title, the type name moves up.
+function TitleBlock({ deadline, typesById, getColor, titleSize }: { deadline: Deadline; titleSize: number } & ColorFns) {
+  const color = getColor(deadline.typeId)
   const typeName = typesById.get(deadline.typeId)?.name ?? 'Unknown'
-  const borderColor = isOverdue ? '#B91C1C' : getColor(deadline.typeId)
-  const labelClass = isOverdue ? 'text-2xl text-red-700' : 'text-2xl text-foreground'
-  const nameColor = isOverdue ? '#B91C1C' : getColor(deadline.typeId)
-  const isCompleted = deadline.completedAt !== null
+  const title = deadlineTitle(deadline)
+  return (
+    <>
+      <span className="overflow-hidden text-ellipsis text-foreground" style={{ fontSize: `${titleSize}px`, lineHeight: `${titleSize + 8}px`, fontWeight: 600 }}>
+        {title ?? typeName}
+      </span>
+      <span className="overflow-hidden text-ellipsis" style={{ fontSize: '26px', lineHeight: '34px' }}>
+        {title && <><span style={{ color, fontWeight: 600 }}>{typeName}</span><span className="text-muted-foreground"> · </span></>}
+        <span className="text-muted-foreground">{deadline.caseLabel}</span>
+      </span>
+    </>
+  )
+}
+
+function CalendarChip({ deadline, ...colors }: { deadline: Deadline } & ColorFns) {
   return (
     <div
-      className={`flex flex-col gap-1 w-full rounded-sm px-4 py-2 mb-2 border-l-4${isCompleted ? ' opacity-50' : ''}`}
-      style={{ borderColor }}
+      data-testid="wallpaper-chip"
+      className="flex flex-col rounded-sm border-l-8 pl-3 pr-2 py-1 overflow-hidden whitespace-nowrap"
+      style={{ borderColor: colors.getColor(deadline.typeId) }}
     >
-      <span className={`${labelClass}${isCompleted ? ' line-through' : ''}`}>{deadline.caseLabel}</span>
-      <span style={{ fontSize: '28px', fontWeight: '600', color: nameColor }}>{typeName}</span>
+      <TitleBlock deadline={deadline} titleSize={34} {...colors} />
     </div>
   )
 }
 
-// Inline BucketSection helper — renders a titled section of deadline pills inside a column
-function BucketSection({ testid, title, titleClass = 'text-foreground', items, isOverdue = false, typesById, getColor, emptyText }: {
+function RollingCalendar({ deadlines, today, todayStr, ...colors }: {
+  deadlines: Deadline[]
+  today: Date
+  todayStr: string
+} & ColorFns) {
+  const days = useMemo(() => {
+    const start = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON })
+    return Array.from({ length: WEEKS_SHOWN * 7 }, (_, i) => addDays(start, i))
+  }, [today])
+  const weekdayLabels = days.slice(0, 7).map(d => format(d, 'EEE'))
+
+  const byDate = useMemo(() => {
+    const map = new Map<string, Deadline[]>()
+    for (const d of deadlines) {
+      const list = map.get(d.date)
+      if (list) list.push(d)
+      else map.set(d.date, [d])
+    }
+    for (const list of map.values()) list.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    return map
+  }, [deadlines])
+
+  return (
+    <section data-testid="wallpaper-calendar" className="flex flex-col h-full min-h-0">
+      <div className="grid grid-cols-7 mb-2">
+        {weekdayLabels.map(label => (
+          <div key={label} className="text-3xl font-semibold text-muted-foreground px-4">{label}</div>
+        ))}
+      </div>
+      <div
+        className="grid grid-cols-7 flex-1 min-h-0 border-t border-l border-border"
+        style={{ gridTemplateRows: `repeat(${WEEKS_SHOWN}, minmax(0, 1fr))` }}
+      >
+        {days.map((day, i) => {
+          const iso = toISODateString(day)
+          const isToday = iso === todayStr
+          const isPast = iso < todayStr
+          // Month name on the first cell and on the 1st of each month so the rolling range reads clearly
+          const label = i === 0 || day.getDate() === 1 ? format(day, 'MMM d') : format(day, 'd')
+          const items = byDate.get(iso) ?? []
+          const shown = items.slice(0, MAX_PER_CELL)
+          const hidden = items.length - shown.length
+          return (
+            <div
+              key={iso}
+              data-testid={`wallpaper-day-${iso}`}
+              className={`flex flex-col gap-2 min-h-0 overflow-hidden border-r border-b border-border p-3 ${isToday ? 'bg-amber-50' : ''} ${isPast ? 'opacity-40' : ''}`}
+              style={isToday ? { boxShadow: 'inset 0 0 0 4px #B45309' } : undefined} // allow-hex: today ring (amber-700)
+            >
+              <div className={`text-3xl ${isToday ? 'font-bold text-amber-700' : 'text-foreground'}`}>{label}</div>
+              {shown.map(d => <CalendarChip key={d.id} deadline={d} {...colors} />)}
+              {hidden > 0 && <div className="text-2xl text-muted-foreground pl-3">+{hidden} more</div>}
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+// List row: date column, then title over type · case
+function ListRow({ deadline, ...colors }: { deadline: Deadline } & ColorFns) {
+  return (
+    <div className="flex items-start gap-6 border-l-8 rounded-sm pl-4 py-1 mb-3" style={{ borderColor: colors.getColor(deadline.typeId) }}>
+      <span className="shrink-0 text-3xl tabular-nums text-muted-foreground" style={{ width: '220px', lineHeight: '40px' }}>
+        {formatIso(deadline.date, 'EEE, MMM d')}
+      </span>
+      <div className="flex flex-col min-w-0 whitespace-nowrap">
+        <TitleBlock deadline={deadline} titleSize={32} {...colors} />
+      </div>
+    </div>
+  )
+}
+
+function BucketSection({ testid, title, titleClass = 'text-foreground', items, emptyText, limit, ...colors }: {
   testid: string
   title: string
   titleClass?: string
   items: Deadline[]
-  isOverdue?: boolean
-  typesById: Map<number, DeadlineType>
-  getColor: (id: number) => string
   emptyText: string
-}) {
+  limit?: number
+} & ColorFns) {
+  const shown = limit === undefined ? items : items.slice(0, limit)
+  const hidden = items.length - shown.length
   return (
-    <div data-testid={testid} className="mb-6">
-      <div className="pb-2 border-b border-border mb-3">
-        <div className={`text-3xl font-semibold ${titleClass}`}>{title}</div>
+    <div data-testid={testid} className="mb-10">
+      <div className="pb-2 border-b border-border mb-4">
+        <div className={`text-4xl font-semibold ${titleClass}`}>{title}</div>
       </div>
       {items.length === 0
-        ? <p className="text-xl text-muted-foreground italic">{emptyText}</p>
-        : items.map(d => (
-            <WallpaperPill key={d.id} deadline={d} isOverdue={isOverdue} typesById={typesById} getColor={getColor} />
-          ))}
+        ? <p className="text-3xl text-muted-foreground italic">{emptyText}</p>
+        : shown.map(d => <ListRow key={d.id} deadline={d} {...colors} />)}
+      {hidden > 0 && <p className="text-3xl text-muted-foreground pl-4">+{hidden} more</p>}
     </div>
   )
 }
@@ -65,17 +179,14 @@ export function WallpaperView(): React.JSX.Element {
   })
 
   const { getColor, typesById, isLoading: typesLoading, isError: typesError } = useTypeColors()
+  const colors: ColorFns = { getColor, typesById }
 
-  // Phase 4: read showCompleted from URL params directly (NOT via useFilters — wallpaper is a
-  // separate route that should not inherit FilterBar state from the main app).
-  // T-04-03-01: strict '=== 1' comparison rejects any other value.
   const [searchParams] = useSearchParams()
-  const showCompleted = searchParams.get('completed') === '1'
 
   // Capture a single Date at component mount so todayStr is always consistent.
   // new Date() no-arg is allowed — SAFE-03 guard narrows to string-arg forms only.
-  const todayRef = useMemo(() => new Date(), [])
-  const todayStr = toISODateString(todayRef)
+  const today = useMemo(() => new Date(), [])
+  const todayStr = toISODateString(today)
 
   const deadlines = deadlinesQuery.data ?? []
 
@@ -87,24 +198,24 @@ export function WallpaperView(): React.JSX.Element {
   const lastUpdated = Number.isFinite(tNumber) ? new Date(tNumber) : new Date()
   const timestampStr = format(lastUpdated, "h:mm a 'on' MMM d, yyyy")
 
-  // Compute buckets from all deadlines, then apply completed filter to non-overdue buckets.
-  // groupByBucket already excludes completedAt !== null for overdue.
-  const buckets = useMemo(() => groupByBucket(deadlines, todayStr), [deadlines, todayStr])
-  const filterCompleted = (arr: Deadline[]) => (showCompleted ? arr : arr.filter(d => d.completedAt === null))
-  const visibleBuckets = useMemo(() => ({
-    overdue:  buckets.overdue,                       // groupByBucket already excludes completed for overdue
-    today:    filterCompleted(buckets.today),
-    thisWeek: filterCompleted(buckets.thisWeek),
-    nextWeek: filterCompleted(buckets.nextWeek),
-    later:    filterCompleted(buckets.later),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [buckets, showCompleted])
+  // The wallpaper is display-only: completed deadlines are always hidden, and past
+  // deadlines only appear (dimmed) on the calendar, never in the list.
+  const active = useMemo(() => deadlines.filter(d => d.completedAt === null), [deadlines])
+  const buckets = useMemo(() => groupByBucket(active, todayStr), [active, todayStr])
+  const allEmpty =
+    buckets.today.length + buckets.thisWeek.length + buckets.nextWeek.length + buckets.later.length === 0
 
-  const totalVisible =
-    visibleBuckets.overdue.length + visibleBuckets.today.length +
-    visibleBuckets.thisWeek.length + visibleBuckets.nextWeek.length +
-    visibleBuckets.later.length
-  const allEmpty = totalVisible === 0
+  // Hand out the list's row budget to sections in display order
+  const sections = [buckets.today, buckets.thisWeek, buckets.nextWeek, buckets.later]
+  let remaining = LIST_ROW_BUDGET
+  const [todayLimit, thisWeekLimit, nextWeekLimit, laterLimit] = sections.map(items => {
+    const n = Math.min(items.length, remaining)
+    remaining -= n
+    return n
+  })
+
+  const rangeStart = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON })
+  const rangeEnd = addDays(rangeStart, WEEKS_SHOWN * 7 - 1)
 
   if (deadlinesQuery.isLoading || typesLoading) {
     return <div className="animate-pulse bg-muted rounded h-4 w-40" />
@@ -117,66 +228,51 @@ export function WallpaperView(): React.JSX.Element {
     <div
       data-testid="wallpaper-root"
       style={{
-        width: '7680px',
-        height: '2160px',
+        width: `${CANVAS_W}px`,
+        height: `${CANVAS_H}px`,
         overflow: 'hidden',
         background: '#FFFFFF', // allow-hex: wallpaper canvas background (not a type color)
         fontFamily: 'var(--font-sans)',
         position: 'relative',
+        paddingLeft: `${ICON_GUTTER}px`,
       }}
-      className="p-16"
+      className="p-16 flex flex-col"
     >
-      {/* Header row */}
-      <header className="flex items-end justify-between pb-4 border-b border-border mb-4">
-        <h1 className="text-4xl font-semibold text-foreground">Case Calendar Deadlines</h1>
+      <header className="flex items-baseline justify-between pb-4 border-b border-border mb-8">
+        <div data-testid="wallpaper-range" className="text-5xl font-semibold text-foreground">
+          {format(rangeStart, 'MMM d')} – {format(rangeEnd, 'MMM d, yyyy')}
+        </div>
+        <div className="text-4xl text-muted-foreground">{format(today, 'EEEE, MMMM d')}</div>
       </header>
 
-      {/* Main body: 3-column grid or empty state */}
-      {allEmpty ? (
-        <div className="flex flex-col items-center justify-center h-full gap-4">
-          <CalendarIcon className="w-24 h-24 text-muted-foreground" />
-          <p className="text-3xl text-muted-foreground">All caught up — no upcoming deadlines</p>
-        </div>
-      ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '32px',
-          height: 'calc(2160px - 80px - 64px - 64px)',
-        }}>
-          {/* Column 1: Priority (Overdue + Today) */}
-          <div data-testid="wallpaper-column-priority" className="rounded-lg p-4 bg-red-50">
-            <BucketSection testid="wallpaper-bucket-overdue" title="OVERDUE" titleClass="text-red-700"
-              items={visibleBuckets.overdue} isOverdue typesById={typesById} getColor={getColor}
-              emptyText="No overdue deadlines." />
-            <BucketSection testid="wallpaper-bucket-today" title="TODAY" titleClass="text-amber-700"
-              items={visibleBuckets.today} typesById={typesById} getColor={getColor}
-              emptyText="Nothing due today." />
-          </div>
+      <div className="flex-1 min-h-0 pb-8" style={{ display: 'grid', gridTemplateColumns: `minmax(0, 1fr) ${LIST_W}px`, gap: '96px' }}>
+        <RollingCalendar deadlines={active} today={today} todayStr={todayStr} {...colors} />
 
-          {/* Column 2: Current (This Week + Next Week) */}
-          <div data-testid="wallpaper-column-current" className="rounded-lg p-4">
-            <BucketSection testid="wallpaper-bucket-thisWeek" title="THIS WEEK"
-              items={visibleBuckets.thisWeek} typesById={typesById} getColor={getColor}
-              emptyText="Nothing this week." />
-            <BucketSection testid="wallpaper-bucket-nextWeek" title="NEXT WEEK"
-              items={visibleBuckets.nextWeek} typesById={typesById} getColor={getColor}
-              emptyText="Nothing next week." />
-          </div>
-
-          {/* Column 3: Later */}
-          <div data-testid="wallpaper-column-later" className="rounded-lg p-4">
-            <BucketSection testid="wallpaper-bucket-later" title="LATER"
-              items={visibleBuckets.later} typesById={typesById} getColor={getColor}
-              emptyText="Nothing on the horizon." />
-          </div>
-        </div>
-      )}
+        <section data-testid="wallpaper-list" className="min-w-0 min-h-0 overflow-hidden">
+          {allEmpty ? (
+            <div className="flex flex-col items-center justify-center h-full gap-6">
+              <CalendarIcon className="w-24 h-24 text-muted-foreground" />
+              <p className="text-4xl text-muted-foreground">All caught up — no upcoming deadlines</p>
+            </div>
+          ) : (
+            <>
+              <BucketSection testid="wallpaper-bucket-today" title="TODAY" titleClass="text-amber-700"
+                items={buckets.today} emptyText="Nothing due today." limit={todayLimit} {...colors} />
+              <BucketSection testid="wallpaper-bucket-thisWeek" title="THIS WEEK"
+                items={buckets.thisWeek} emptyText="Nothing else this week." limit={thisWeekLimit} {...colors} />
+              <BucketSection testid="wallpaper-bucket-nextWeek" title="NEXT WEEK"
+                items={buckets.nextWeek} emptyText="Nothing next week." limit={nextWeekLimit} {...colors} />
+              <BucketSection testid="wallpaper-bucket-later" title="LATER"
+                items={buckets.later} emptyText="Nothing on the horizon." limit={laterLimit} {...colors} />
+            </>
+          )}
+        </section>
+      </div>
 
       {/* Bottom-right timestamp footer — always visible */}
       <span
         data-testid="wallpaper-timestamp"
-        className="absolute bottom-8 right-12 text-sm text-muted-foreground"
+        className="absolute bottom-6 right-16 text-2xl text-muted-foreground"
       >
         Last updated {timestampStr}
       </span>
