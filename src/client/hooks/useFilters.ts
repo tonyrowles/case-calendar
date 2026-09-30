@@ -6,11 +6,12 @@ export type DateRange = 'overdue' | 'today' | 'this-week' | 'this-month' | 'all'
 export interface Filters {
   case: string | null   // ?case=Smith%20v.%20Jones
   typeIds: number[]     // ?type=1,3,7
-  range: DateRange      // ?range=this-week (default: this-week, omitted from URL when at default)
+  range: DateRange      // ?range=this-week (default: all, omitted from URL when at default)
   showCompleted: boolean // ?completed=1 (default: false; omitted from URL when false)
 }
 
-const DEFAULT_RANGE: DateRange = 'this-week'
+// Default is everything: the desktop wallpaper already shows the next few weeks at a glance
+const DEFAULT_RANGE: DateRange = 'all'
 
 const VALID_RANGES: readonly DateRange[] = ['overdue', 'today', 'this-week', 'this-month', 'all'] as const
 

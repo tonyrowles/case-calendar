@@ -2,7 +2,7 @@
 // Wave 2 — converted from it.todo stubs to live it() tests.
 //
 // Requirements: FILT-04 (URL as single source of truth for filter state)
-// Security: URL injection — ?type=abc clamped; ?range=garbage falls back to this-week
+// Security: URL injection — ?type=abc clamped; ?range=garbage falls back to all (the default)
 import React from 'react'
 import { describe, it, expect } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
@@ -42,15 +42,15 @@ describe('useFilters — Wave 0 stubs (FILT-04)', () => {
     expect(result.current.filters.range).toBe('overdue')
   })
 
-  it('U3: default-elision — range=this-week removes ?range= from URL (bare URL = default state)', () => {
+  it('U3: default-elision — range=all removes ?range= from URL (bare URL = default state)', () => {
     const { result } = renderHook(() => useFilters(), {
       wrapper: makeWrapper('/?range=overdue'),
     })
     act(() => {
-      result.current.setRange('this-week')
+      result.current.setRange('all')
     })
     // After setting range to default, isDefault should be true if no other filters
-    expect(result.current.filters.range).toBe('this-week')
+    expect(result.current.filters.range).toBe('all')
     expect(result.current.isDefault).toBe(true)
   })
 
@@ -63,7 +63,7 @@ describe('useFilters — Wave 0 stubs (FILT-04)', () => {
     })
     expect(result.current.filters.case).toBeNull()
     expect(result.current.filters.typeIds).toEqual([])
-    expect(result.current.filters.range).toBe('this-week')
+    expect(result.current.filters.range).toBe('all')
     expect(result.current.isDefault).toBe(true)
   })
 
@@ -75,10 +75,10 @@ describe('useFilters — Wave 0 stubs (FILT-04)', () => {
     expect(result.current.filters.typeIds).toEqual([1, 2])
   })
 
-  it('U6: URL injection: ?range=garbage falls back to this-week range', () => {
+  it('U6: URL injection: ?range=garbage falls back to the default (all) range', () => {
     const { result } = renderHook(() => useFilters(), {
       wrapper: makeWrapper('/?range=garbage'),
     })
-    expect(result.current.filters.range).toBe('this-week')
+    expect(result.current.filters.range).toBe('all')
   })
 })

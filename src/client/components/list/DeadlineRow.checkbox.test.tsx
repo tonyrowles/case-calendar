@@ -11,7 +11,7 @@ afterEach(() => cleanup())
 
 const TYPE_FILING: DeadlineType = { id: 1, name: 'Filing', color: '#374151', createdAt: '' }
 const typesById = new Map([[1, TYPE_FILING]])
-const getColor = (_id: number) => '#374151'
+const caseColorOf = (_label: string) => '#374151'
 
 function makeDeadline(overrides: Partial<Deadline> = {}): Deadline {
   return {
@@ -40,7 +40,7 @@ function renderRow(
       deadline={deadline}
       bucket="thisWeek"
       typesById={typesById}
-      getColor={getColor}
+      caseColorOf={caseColorOf}
       {...callbacks}
     />
   )

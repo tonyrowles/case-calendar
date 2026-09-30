@@ -4,12 +4,10 @@ export interface ShortcutHandlers {
   onNewDeadline: () => void       // n
   onEditSelected: () => void      // e
   onDeleteSelected: () => void    // Delete
-  onJumpToday: () => void         // t
   onMoveNext: () => void          // j
   onMovePrev: () => void          // k (when not chorded with meta/ctrl)
   onOpenHelp: () => void          // ?
   onOpenCommandK: () => void      // Cmd+K / Ctrl+K
-  onJumpToDate: () => void        // g
 }
 
 const TYPING_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
@@ -66,14 +64,6 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
         case 'Delete':
           e.preventDefault()
           handlersRef.current.onDeleteSelected()
-          break
-        case 't':
-          e.preventDefault()
-          handlersRef.current.onJumpToday()
-          break
-        case 'g':
-          e.preventDefault()
-          handlersRef.current.onJumpToDate()
           break
         case 'j':
           e.preventDefault()

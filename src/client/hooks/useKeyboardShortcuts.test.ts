@@ -9,12 +9,10 @@ function makeHandlers(): ShortcutHandlers {
     onNewDeadline: vi.fn(),
     onEditSelected: vi.fn(),
     onDeleteSelected: vi.fn(),
-    onJumpToday: vi.fn(),
     onMoveNext: vi.fn(),
     onMovePrev: vi.fn(),
     onOpenHelp: vi.fn(),
     onOpenCommandK: vi.fn(),
-    onJumpToDate: vi.fn(),
   }
 }
 
@@ -57,16 +55,6 @@ describe('useKeyboardShortcuts', () => {
     expect(handlers.onNewDeadline).not.toHaveBeenCalled()
   })
 
-  it("t fires onJumpToday (KBD-04)", () => {
-    const handlers = makeHandlers()
-    renderHook(() => useKeyboardShortcuts(handlers))
-
-    fireEvent.keyDown(window, { key: 't' })
-
-    expect(handlers.onJumpToday).toHaveBeenCalledOnce()
-    expect(handlers.onNewDeadline).not.toHaveBeenCalled()
-  })
-
   it("j fires onMoveNext (KBD-05)", () => {
     const handlers = makeHandlers()
     renderHook(() => useKeyboardShortcuts(handlers))
@@ -99,7 +87,7 @@ describe('useKeyboardShortcuts', () => {
     expect(handlers.onNewDeadline).not.toHaveBeenCalled()
     expect(handlers.onEditSelected).not.toHaveBeenCalled()
     expect(handlers.onDeleteSelected).not.toHaveBeenCalled()
-    expect(handlers.onJumpToday).not.toHaveBeenCalled()
+    expect(handlers.onMoveNext).not.toHaveBeenCalled()
     expect(handlers.onMoveNext).not.toHaveBeenCalled()
     expect(handlers.onMovePrev).not.toHaveBeenCalled()
     expect(handlers.onOpenHelp).not.toHaveBeenCalled()
@@ -155,7 +143,7 @@ describe('useKeyboardShortcuts', () => {
     expect(handlers.onNewDeadline).not.toHaveBeenCalled()
     expect(handlers.onEditSelected).not.toHaveBeenCalled()
     expect(handlers.onDeleteSelected).not.toHaveBeenCalled()
-    expect(handlers.onJumpToday).not.toHaveBeenCalled()
+    expect(handlers.onMoveNext).not.toHaveBeenCalled()
     expect(handlers.onMoveNext).not.toHaveBeenCalled()
     expect(handlers.onMovePrev).not.toHaveBeenCalled()
     expect(handlers.onOpenHelp).not.toHaveBeenCalled()
@@ -232,7 +220,7 @@ describe('useKeyboardShortcuts', () => {
         fireEvent.keyDown(el, { key: '?' })
 
         expect(handlers.onNewDeadline).not.toHaveBeenCalled()
-        expect(handlers.onJumpToday).not.toHaveBeenCalled()
+        expect(handlers.onMoveNext).not.toHaveBeenCalled()
         expect(handlers.onMoveNext).not.toHaveBeenCalled()
         expect(handlers.onOpenHelp).not.toHaveBeenCalled()
       })
@@ -252,28 +240,5 @@ describe('useKeyboardShortcuts', () => {
 
       expect(handlers.onOpenCommandK).toHaveBeenCalledOnce()
     })
-  })
-
-  it("g fires onJumpToDate (KBD-08)", () => {
-    const handlers = makeHandlers()
-    renderHook(() => useKeyboardShortcuts(handlers))
-
-    fireEvent.keyDown(window, { key: 'g' })
-
-    expect(handlers.onJumpToDate).toHaveBeenCalledOnce()
-    expect(handlers.onNewDeadline).not.toHaveBeenCalled()
-  })
-
-  it("g does NOT fire onJumpToDate when active element is INPUT (KBD-08 typing guard)", () => {
-    const handlers = makeHandlers()
-    renderHook(() => useKeyboardShortcuts(handlers))
-
-    const input = document.createElement('input')
-    document.body.appendChild(input)
-    input.focus()
-
-    fireEvent.keyDown(input, { key: 'g' })
-
-    expect(handlers.onJumpToDate).not.toHaveBeenCalled()
   })
 })

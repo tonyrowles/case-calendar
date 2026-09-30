@@ -5,6 +5,7 @@ import { parseLocalDate } from '@/shared/lib/date.js'
 import type { Bucket } from '@/shared/lib/buckets.js'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
 import { Checkbox } from '@/client/components/ui/checkbox.js'
+import { CaseBadge } from '@/client/components/CaseBadge.js'
 
 type DeleteStep = 'idle' | 'confirm' | 'executing'
 
@@ -12,7 +13,8 @@ export interface DeadlineRowProps {
   deadline: Deadline
   bucket: Bucket
   typesById: Map<number, DeadlineType>
-  getColor: (id: number) => string
+  /** Case -> color (useCaseColors). Rows are color-coded by case, not by type. */
+  caseColorOf: (caseLabel: string) => string
   /** Called when the row body is clicked (not checkbox, not delete button) */
   onRowClick?: (id: number) => void
   /** Called when checkbox is toggled; completed=true → mark complete, false → unmark */
@@ -34,7 +36,7 @@ export function DeadlineRow({
   deadline,
   bucket,
   typesById,
-  getColor,
+  caseColorOf,
   onRowClick,
   onComplete,
   onDelete,
@@ -112,23 +114,32 @@ export function DeadlineRow({
     }
   }
 
+  const caseColor = caseColorOf(deadline.caseLabel)
+
+  // Left bar = case color on every row; overdue/today are signalled by row tint + date color.
   const containerClass = [
-    'group relative flex items-center h-12 gap-4 border-b border-border last:border-0',
-    'transition-colors cursor-pointer',
-    isOverdue ? 'bg-red-50 border-l-4 border-l-red-700 pl-3 pr-4 hover:bg-red-100' : '',
-    isToday ? 'bg-amber-50 border-l-4 border-l-amber-500 pl-3 pr-4 hover:bg-amber-100' : '',
-    !isOverdue && !isToday ? 'px-4 hover:bg-muted/50' : '',
+    'group relative flex items-center h-12 gap-4 border-b border-border last:border-b-0',
+    'border-l-4 pl-3 pr-4 transition-colors cursor-pointer',
+    isOverdue ? 'bg-red-50 hover:bg-red-100' : '',
+    isToday ? 'bg-amber-50 hover:bg-amber-100' : '',
+    !isOverdue && !isToday ? 'hover:bg-muted/50' : '',
     isCompleted ? 'opacity-50' : '',
     selectedClass,
   ]
     .filter(Boolean)
     .join(' ')
 
+  const dateClass = [
+    'w-[120px] shrink-0 text-sm',
+    isOverdue ? 'text-red-700 font-semibold' : '',
+    isToday ? 'text-amber-700 font-semibold' : '',
+    !isOverdue && !isToday ? 'text-muted-foreground' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   const caseLabelClass = [
-    'text-sm flex-1 min-w-0 truncate',
-    isOverdue ? 'text-red-700' : '',
-    isToday ? 'text-amber-700' : '',
-    !isOverdue && !isToday ? 'text-foreground' : '',
+    'text-sm flex-1 min-w-0',
     isCompleted ? 'line-through' : '',
   ]
     .filter(Boolean)
@@ -146,6 +157,7 @@ export function DeadlineRow({
       aria-label={ariaLabel}
       data-completed={isCompleted ? 'true' : undefined}
       className={containerClass}
+      style={{ borderLeftColor: caseColor }}
       onClick={() => onRowClick?.(deadline.id)}
     >
       {/* Checkbox — click stops propagation so row-click doesn't fire */}
@@ -160,22 +172,17 @@ export function DeadlineRow({
       />
 
       {/* Date */}
-      <span className="w-[120px] shrink-0 text-sm text-muted-foreground">
+      <span className={dateClass}>
         {formattedDate}
       </span>
 
-      {/* Case label */}
+      {/* Case label — badge in the case color */}
       <span className={caseLabelClass}>
-        {deadline.caseLabel}
+        <CaseBadge label={deadline.caseLabel} color={caseColor} />
       </span>
 
-      {/* Type: color dot + name */}
-      <span className="w-[180px] shrink-0 flex items-center gap-2 text-sm text-foreground">
-        <span
-          className="w-3 h-3 rounded-full inline-block shrink-0"
-          style={{ backgroundColor: getColor(deadline.typeId) }}
-          aria-hidden="true"
-        />
+      {/* Type: name only (color now belongs to the case) */}
+      <span className="w-[180px] shrink-0 text-sm text-foreground truncate">
         {typeName}
       </span>
 

@@ -68,33 +68,28 @@ describe('App filter integration (VIEW-05, FILT-04, FILT-05, VIEW-08)', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(PINNED_DATE)
     // Reset view preference so each test starts in list view
-    localStorage.removeItem('cc-view')
   })
 
   afterEach(() => {
     vi.useRealTimers()
-    localStorage.removeItem('cc-view')
     cleanup()
   })
 
-  it('I1: at default URL (/), list view shows only this-week deadlines (range=this-week default)', async () => {
+  it('I1: at default URL (/), list view shows all deadlines (range=all default)', async () => {
     renderApp('/', qc => {
       qc.setQueryData(['deadlines'], deadlineFixtures)
       qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
       qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
     })
 
-    // Default: range=this-week (2026-05-17 to 2026-05-23)
-    // In-range: id3 (today=2026-05-20), id4 (2026-05-21 thisWeek), id5 (2026-05-22 thisWeek)
-    // applyFilters with range=this-week keeps dates in [thisWeekStart, thisWeekEnd]
-    // id1 and id2 (overdue, date < thisWeekStart) excluded; id6 (later) excluded
+    // Default: range=all -- every (non-completed) deadline, bucketed
     await waitFor(() => {
       const rows = screen.queryAllByRole('row')
       expect(rows.length).toBeGreaterThan(0)
     }, { timeout: 3000 })
 
     const rows = screen.getAllByRole('row')
-    expect(rows.length).toBe(3) // id3, id4, id5
+    expect(rows.length).toBe(6)
   })
 
   it('I2: at ?range=all, list view shows all 6 deadlines bucketed', async () => {
@@ -113,9 +108,8 @@ describe('App filter integration (VIEW-05, FILT-04, FILT-05, VIEW-08)', () => {
     expect(rows.length).toBe(6)
   })
 
-  it('I3: VIEW-05 — applying case filter narrows list view rows (single-dataset proof)', async () => {
+  it('I3: VIEW-05 — applying case filter narrows list view rows', async () => {
     // Smith has 3 deadlines: id1 (overdue), id2 (overdue), id5 (thisWeek)
-    // VIEW-05: same filtered dataset goes to both views; verified by list row count + calendar not crashing
     renderApp('/?case=Smith%20v.%20Jones&range=all', qc => {
       qc.setQueryData(['deadlines'], deadlineFixtures)
       qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
@@ -129,31 +123,9 @@ describe('App filter integration (VIEW-05, FILT-04, FILT-05, VIEW-08)', () => {
     }, { timeout: 3000 })
 
     expect(screen.getAllByRole('row').length).toBe(3)
-
-    // Toggle to Calendar view — CalendarView receives the same filteredDeadlines prop
-    // (At Task 2, the optional prop is accepted by CalendarViewProps but CalendarView
-    //  still uses its internal useQuery — Task 3 will swap it. The toggle itself must not crash.)
-    const calendarBtn = screen.getByRole('button', { name: /^calendar$/i })
-    fireEvent.click(calendarBtn)
-
-    // Calendar is now rendered; list rows are gone from DOM
-    // FullCalendar uses role="row" for its grid, so we check for DeadlineRow absence via
-    // the ListView container (role="table" aria-label="Deadlines list") being absent
-    const listTable = document.querySelector('[aria-label="Deadlines list"]')
-    expect(listTable).toBeNull()
-
-    // Switch back to list — filter state (URL params) preserved
-    const listBtn = screen.getByRole('button', { name: /^list$/i })
-    fireEvent.click(listBtn)
-
-    await waitFor(() => {
-      const rows = screen.queryAllByRole('row')
-      // Filter is preserved: still Smith-only (3 rows)
-      expect(rows.length).toBe(3)
-    }, { timeout: 3000 })
   })
 
-  it('I4: FILT-05 — Clear button removes all filters; list returns to default this-week view', async () => {
+  it('I4: FILT-05 — Clear button removes all filters; list returns to the default (All) view', async () => {
     renderApp('/?case=Smith%20v.%20Jones&type=1&range=overdue', qc => {
       qc.setQueryData(['deadlines'], deadlineFixtures)
       qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
@@ -170,7 +142,7 @@ describe('App filter integration (VIEW-05, FILT-04, FILT-05, VIEW-08)', () => {
     const clearBtn = screen.getByRole('button', { name: /clear all filters/i })
     fireEvent.click(clearBtn)
 
-    // After clear, default view (this-week range) should apply
+    // After clear, the default view (range=all) should apply
     // This-week deadlines: id3 (today), id4 (thisWeek), id5 (thisWeek) = 3 rows
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /clear all filters/i })).toBeNull()

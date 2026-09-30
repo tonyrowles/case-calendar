@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // Wave 2 — converted from it.todo stubs to live it() tests.
 //
-// Requirements: VIEW-06 (3-pane at >=1920px), VIEW-07 (responsive breakpoint switching)
+// Requirements: VIEW-06/07 — list + form side by side on wide screens (the calendar view was
+// removed; the desktop wallpaper is the calendar), single column on narrow screens.
 import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
@@ -33,93 +34,66 @@ import { useBreakpoint } from '@/client/hooks/useBreakpoint.js'
 
 const stubProps = {
   filterBar: <div data-testid="fb">FB</div>,
-  calendar: <div data-testid="cal">CAL</div>,
   list: <div data-testid="list">LIST</div>,
   form: <div data-testid="form">FORM</div>,
-  view: 'list' as const,
-  onViewChange: vi.fn(),
 }
 
+const PANE_SIZES_ID = 'cc-pane-sizes-list-form'
+
 describe('PaneLayout', () => {
-  it("renders three panels when tier=three (VIEW-06)", () => {
-    vi.mocked(useBreakpoint).mockReturnValue('three')
-    const { queryByTestId } = render(<PaneLayout {...stubProps} />)
-    expect(queryByTestId('cal')).not.toBeNull()
+  for (const tier of ['three', 'two'] as const) {
+    it(`renders list + form in a resizable group at tier=${tier}`, () => {
+      vi.mocked(useBreakpoint).mockReturnValue(tier)
+      const { container, queryByTestId } = render(<PaneLayout {...stubProps} />)
+      expect(queryByTestId('fb')).not.toBeNull()
+      expect(queryByTestId('list')).not.toBeNull()
+      expect(queryByTestId('form')).not.toBeNull()
+      expect(container.querySelector('[data-group]')).not.toBeNull()
+    })
+  }
+
+  it("renders a single column (no ResizablePanelGroup) with form and list when tier=one (VIEW-07)", () => {
+    vi.mocked(useBreakpoint).mockReturnValue('one')
+    const { container, queryByTestId } = render(<PaneLayout {...stubProps} />)
+    // react-resizable-panels emits [data-group] on the panel group element
+    expect(container.querySelector('[data-group]')).toBeNull()
     expect(queryByTestId('list')).not.toBeNull()
     expect(queryByTestId('form')).not.toBeNull()
   })
 
-  it("renders two panels when tier=two", () => {
-    vi.mocked(useBreakpoint).mockReturnValue('two')
-    // view='list' so list slot should render, not calendar
-    const { queryByTestId } = render(<PaneLayout {...stubProps} view="list" />)
-    expect(queryByTestId('list')).not.toBeNull()
-    expect(queryByTestId('form')).not.toBeNull()
-    // calendar slot should NOT render at tier=two when view='list'
-    expect(queryByTestId('cal')).toBeNull()
+  it("has no List/Calendar view toggle at any tier", () => {
+    for (const tier of ['three', 'two', 'one'] as const) {
+      vi.mocked(useBreakpoint).mockReturnValue(tier)
+      const { queryByRole } = render(<PaneLayout {...stubProps} />)
+      expect(queryByRole('group', { name: 'View mode' })).toBeNull()
+      cleanup()
+    }
   })
 
-  it("renders one panel (single column, no ResizablePanelGroup) when tier=one (VIEW-07)", () => {
-    vi.mocked(useBreakpoint).mockReturnValue('one')
-    const { container } = render(<PaneLayout {...stubProps} />)
-    // react-resizable-panels v2 emits [data-group] on the panel group element
-    const panelGroup = container.querySelector('[data-group]')
-    expect(panelGroup).toBeNull()
-  })
-
-  it("view toggle is hidden at tier=three", () => {
-    vi.mocked(useBreakpoint).mockReturnValue('three')
-    const { queryByRole } = render(<PaneLayout {...stubProps} />)
-    expect(queryByRole('group', { name: 'View mode' })).toBeNull()
-  })
-
-  it("view toggle is visible at tier=two", () => {
-    vi.mocked(useBreakpoint).mockReturnValue('two')
-    const { queryByRole } = render(<PaneLayout {...stubProps} />)
-    expect(queryByRole('group', { name: 'View mode' })).not.toBeNull()
-  })
-
-  it("view toggle is visible at tier=one", () => {
-    vi.mocked(useBreakpoint).mockReturnValue('one')
-    const { queryByRole } = render(<PaneLayout {...stubProps} />)
-    expect(queryByRole('group', { name: 'View mode' })).not.toBeNull()
-  })
-
-  it("passes autoSaveId='cc-pane-sizes' to ResizablePanelGroup at tier=three", () => {
+  it(`passes autoSaveId='${PANE_SIZES_ID}' to ResizablePanelGroup`, () => {
     vi.mocked(useBreakpoint).mockReturnValue('three')
     const { container } = render(<PaneLayout {...stubProps} />)
-    // react-resizable-panels v2 emits [data-group] on the Group element;
-    // we also pass autoSaveId as the `id` prop so it's queryable
+    // autoSaveId is passed as the Group `id` prop so it's queryable
     const panelGroupEl = container.querySelector('[data-group]')
-    expect(panelGroupEl).not.toBeNull()
-    expect(panelGroupEl?.getAttribute('id')).toBe('cc-pane-sizes')
+    expect(panelGroupEl?.getAttribute('id')).toBe(PANE_SIZES_ID)
   })
 
-  it("CR-02: layout persistence — useDefaultLayout writes layout to localStorage and reads it back on remount", () => {
-    // Clear any prior stored layout to ensure clean test state
-    localStorage.removeItem('cc-pane-sizes')
+  it("CR-02: layout persistence — a stored layout is read back on remount", () => {
+    localStorage.removeItem(PANE_SIZES_ID)
     vi.mocked(useBreakpoint).mockReturnValue('three')
 
-    // react-resizable-panels' useDefaultLayout stores layout under the `id` key.
-    // After mount, simulate a layout change by writing directly to localStorage
-    // (as useDefaultLayout's onLayoutChanged callback would do) then remount.
-    const newLayout = [45, 30, 25]
-    localStorage.setItem('cc-pane-sizes', JSON.stringify(newLayout))
+    // useDefaultLayout stores layout under the `id` key; simulate a saved layout, then remount
+    const newLayout = [70, 30]
+    localStorage.setItem(PANE_SIZES_ID, JSON.stringify(newLayout))
 
-    // Remount — useDefaultLayout should read back the stored layout
     cleanup()
     const { container } = render(<PaneLayout {...stubProps} />)
 
-    // The panel group must render (confirming PaneLayout didn't crash with a restored layout)
     const panelGroupEl = container.querySelector('[data-group]')
     expect(panelGroupEl).not.toBeNull()
-    expect(panelGroupEl?.getAttribute('id')).toBe('cc-pane-sizes')
+    expect(panelGroupEl?.getAttribute('id')).toBe(PANE_SIZES_ID)
+    expect(localStorage.getItem(PANE_SIZES_ID)).toBe(JSON.stringify(newLayout))
 
-    // localStorage key should still hold the layout we wrote
-    const stored = localStorage.getItem('cc-pane-sizes')
-    expect(stored).toBe(JSON.stringify(newLayout))
-
-    // Cleanup
-    localStorage.removeItem('cc-pane-sizes')
+    localStorage.removeItem(PANE_SIZES_ID)
   })
 })
