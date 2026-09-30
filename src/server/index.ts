@@ -7,6 +7,7 @@
 // For direct invocations (e.g. `node dist/server/index.js`), ensure TZ is set
 // in the shell or via a wrapper: `TZ=America/Los_Angeles node dist/server/index.js`
 
+import './load-env.js'                    // must stay first: loads .env.local before any module reads process.env
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
