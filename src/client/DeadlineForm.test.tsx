@@ -8,6 +8,7 @@ import { DeadlineForm } from './components/DeadlineForm.js'
 // Mock the api module so DeadlineForm doesn't fire real fetch calls in tests
 vi.mock('./lib/api.js', () => ({
   getDeadlineTypes: vi.fn().mockResolvedValue([]),
+  getCaseLabels: vi.fn().mockResolvedValue([]),
   createDeadline: vi.fn().mockResolvedValue({}),
 }))
 

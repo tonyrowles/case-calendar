@@ -8,11 +8,11 @@ import { Loader2, CalendarIcon } from 'lucide-react'
 import { deadlineCreateSchema } from '@/shared/schemas/deadline.js'
 import type { DeadlineCreate, Deadline } from '@/shared/schemas/deadline.js'
 import { parseLocalDate, toISODateString } from '@/shared/lib/date.js'
-import { createDeadline, getDeadlineTypes } from '@/client/lib/api.js'
+import { createDeadline, getCaseLabels, getDeadlineTypes } from '@/client/lib/api.js'
+import { canonicalizeCaseLabel } from '@/shared/lib/case-labels.js'
 import { useDeadlineMutations } from '@/client/hooks/useDeadlineMutations.js'
 
 import { Button } from '@/client/components/ui/button.js'
-import { Input } from '@/client/components/ui/input.js'
 import { Textarea } from '@/client/components/ui/textarea.js'
 import { Label } from '@/client/components/ui/label.js'
 import {
@@ -29,6 +29,7 @@ import {
 } from '@/client/components/ui/popover.js'
 import { Calendar } from '@/client/components/ui/calendar.js'
 import { ErrorBanner } from './ErrorBanner.js'
+import { CaseLabelInput } from './CaseLabelInput.js'
 
 export interface DeadlineFormProps {
   /** YYYY-MM-DD string; when changed, drives the date field via setValue + scrolls form + focuses case-label input */
@@ -61,6 +62,13 @@ export function DeadlineForm({ selectedDate, deadline, prefillValues, onCancel, 
     queryKey: ['deadline-types'],
     queryFn: getDeadlineTypes,
   })
+
+  // Existing case names for the Case picker (same cache the FilterBar's CaseCombobox uses)
+  const caseLabelsQuery = useQuery({
+    queryKey: ['case-labels'],
+    queryFn: getCaseLabels,
+  })
+  const caseLabels = caseLabelsQuery.data ?? []
 
   const {
     register,
@@ -154,7 +162,8 @@ export function DeadlineForm({ selectedDate, deadline, prefillValues, onCancel, 
   useEffect(() => {
     if (!prefillValues || isEdit) return
     if (prefillValues.date) setValue('date', prefillValues.date, { shouldValidate: true, shouldDirty: true })
-    if (prefillValues.caseLabel) setValue('caseLabel', prefillValues.caseLabel, { shouldValidate: true, shouldDirty: true })
+    // Snap NL-parsed / duplicated case names onto an existing case when they match loosely
+    if (prefillValues.caseLabel) setValue('caseLabel', canonicalizeCaseLabel(prefillValues.caseLabel, caseLabels), { shouldValidate: true, shouldDirty: true })
     if (prefillValues.typeId) setValue('typeId', prefillValues.typeId, { shouldValidate: true, shouldDirty: true })
     if (prefillValues.description !== undefined) setValue('description', prefillValues.description ?? '')
     if (typeof formRef.current?.scrollIntoView === 'function') {
@@ -164,7 +173,9 @@ export function DeadlineForm({ selectedDate, deadline, prefillValues, onCancel, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillValues])
 
-  async function onSubmit(data: DeadlineCreate) {
+  async function onSubmit(formData: DeadlineCreate) {
+    // Enter can submit without the case field ever blurring, so snap to an existing case here too
+    const data = { ...formData, caseLabel: canonicalizeCaseLabel(formData.caseLabel, caseLabels) }
     if (isEdit && deadline) {
       try {
         await mutations.update.mutateAsync({ id: deadline.id, patch: data })
@@ -248,12 +259,21 @@ export function DeadlineForm({ selectedDate, deadline, prefillValues, onCancel, 
           <Label htmlFor="caseLabel" className="text-sm font-semibold">
             Case
           </Label>
-          <Input
-            id="caseLabel"
-            placeholder="e.g. Smith v. Jones"
-            autoComplete="off"
-            aria-describedby={errors.caseLabel ? 'caseLabel-error' : undefined}
-            {...register('caseLabel')}
+          <Controller
+            name="caseLabel"
+            control={control}
+            render={({ field }) => (
+              <CaseLabelInput
+                id="caseLabel"
+                value={field.value ?? ''}
+                labels={caseLabels}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                inputRef={field.ref}
+                placeholder="e.g. Smith v. Jones"
+                aria-describedby={errors.caseLabel ? 'caseLabel-error' : undefined}
+              />
+            )}
           />
           {errors.caseLabel && (
             <p className="text-destructive text-xs" id="caseLabel-error">
