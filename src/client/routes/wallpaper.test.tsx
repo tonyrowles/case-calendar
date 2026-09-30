@@ -10,6 +10,7 @@ import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
 
 // Mock the api module so WallpaperView doesn't fire real fetch calls in tests
 vi.mock('@/client/lib/api.js', () => ({
+  getCaseColors: vi.fn().mockResolvedValue([]),
   getDeadlines: vi.fn(),
   getDeadlineTypes: vi.fn(),
   createDeadline: vi.fn(),

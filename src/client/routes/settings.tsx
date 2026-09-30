@@ -5,6 +5,7 @@ import { getDeadlineTypes } from '@/client/lib/api.js'
 import { TypeListItem } from '@/client/components/settings/TypeListItem.js'
 import { AddTypeRow } from '@/client/components/settings/AddTypeRow.js'
 import { SubscribeIcalItem } from '@/client/components/settings/SubscribeIcalItem.js'
+import { CaseColorList } from '@/client/components/settings/CaseColorList.js'
 
 export function SettingsPage() {
   const typesQuery = useQuery({
@@ -24,6 +25,15 @@ export function SettingsPage() {
       <h2 className="text-2xl font-semibold mb-8">Settings</h2>
 
       <section>
+        <h3 className="text-xl font-semibold mb-1">Cases</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Each case gets its own color automatically. Pick one to change it; the new color
+          shows everywhere, including the desktop wallpaper.
+        </p>
+        <CaseColorList />
+      </section>
+
+      <section className="mt-8">
         <h3 className="text-xl font-semibold mb-4">Deadline Types</h3>
 
         {typesQuery.isError && (

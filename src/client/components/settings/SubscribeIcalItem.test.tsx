@@ -8,6 +8,11 @@ import { SubscribeIcalItem } from './SubscribeIcalItem.js'
 
 // Hoist mock to top level (required by vitest module mocking rules)
 vi.mock('@/client/lib/api.js', () => ({
+  getCaseColors: vi.fn().mockResolvedValue([]),
+  getCaseLabels: vi.fn().mockResolvedValue([]),
+  getDeadlines: vi.fn().mockResolvedValue([]),
+  setCaseColor: vi.fn().mockResolvedValue({}),
+  resetCaseColor: vi.fn().mockResolvedValue(undefined),
   getDeadlineTypes: vi.fn().mockResolvedValue([]),
   createDeadlineType: vi.fn(),
   updateDeadlineType: vi.fn(),

@@ -51,6 +51,22 @@ describe('assignCaseColors', () => {
     expect(colors.get('Smith v. Jones')).toBe(colors.get('smith v.  jones'))
   })
 
+  it('overrides win, match case/space-insensitively, and their colors are not reused automatically', () => {
+    const labels = Array.from({ length: CASE_PALETTE.length - 1 }, (_, i) => `Matter ${i}`)
+    const pinnedColor = caseColor('Matter 0') === CASE_PALETTE[5] ? CASE_PALETTE[6] : CASE_PALETTE[5]
+    const colors = assignCaseColors(labels, [{ caseLabel: '  MATTER 0 ', color: pinnedColor }])
+    expect(colors.get('Matter 0')).toBe(pinnedColor)
+    for (const l of labels.slice(1)) expect(colors.get(l)).not.toBe(pinnedColor)
+    // Still collision-free among the shown cases
+    expect(new Set(colors.values()).size).toBe(labels.length)
+  })
+
+  it("reserves an override's color even when that case is not currently shown", () => {
+    const preferred = caseColor('Smith v. Jones')
+    const colors = assignCaseColors(['Smith v. Jones'], [{ caseLabel: 'Closed Matter', color: preferred }])
+    expect(colors.get('Smith v. Jones')).not.toBe(preferred)
+  })
+
   it('still returns a color for every case beyond the palette size', () => {
     const labels = Array.from({ length: CASE_PALETTE.length + 5 }, (_, i) => `Matter ${i}`)
     const colors = assignCaseColors(labels)

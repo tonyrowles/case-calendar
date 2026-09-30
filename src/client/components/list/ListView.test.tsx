@@ -16,6 +16,7 @@ import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
 import { ListView } from './ListView.js'
 
 vi.mock('@/client/lib/api.js', () => ({
+  getCaseColors: vi.fn().mockResolvedValue([]),
   getDeadlineTypes: vi.fn().mockResolvedValue([]),
   getDeadlines: vi.fn().mockResolvedValue([]),
 }))

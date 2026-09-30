@@ -20,6 +20,18 @@ export const deadlines = sqliteTable('deadlines', {
 })
 
 /**
+ * User-chosen case colors (overrides of the automatic per-case color). Cases are
+ * free-text labels, so rows are keyed by the normalized label (caseColorKey in
+ * src/shared/lib/case-colors.ts); caseLabel keeps the spelling it was set with.
+ */
+export const caseColors = sqliteTable('case_colors', {
+  caseKey: text().primaryKey(),
+  caseLabel: text().notNull(),
+  color: text().notNull(),           // one of CASE_PALETTE
+  updatedAt: text().notNull().default(sql`(CURRENT_TIMESTAMP)`),
+})
+
+/**
  * WR-05: SQLite trigger to auto-update updatedAt on every UPDATE.
  * DEFAULT (CURRENT_TIMESTAMP) only fires on INSERT; without this trigger any
  * Phase 2+ edit endpoint that omits SET updatedAt would return a stale value.

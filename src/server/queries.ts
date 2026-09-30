@@ -1,8 +1,9 @@
 import { db } from './db.js'
-import { deadlines, deadlineTypes } from '../../drizzle/schema.js'
+import { caseColors, deadlines, deadlineTypes } from '../../drizzle/schema.js'
 import { desc, eq, sql } from 'drizzle-orm'
 import type { DeadlineUpdate } from '../shared/schemas/deadline.js'
 import type { DeadlineTypeCreate, DeadlineTypeUpdate } from '../shared/schemas/deadlineType.js'
+import { caseColorKey, type CaseColorOverride } from '../shared/lib/case-colors.js'
 
 // HOOK-04: Phase 9 wallpaper worker subscribes here
 let onMutationCallback: (() => void) | null = null
@@ -144,4 +145,42 @@ export function listDistinctCaseLabels(): string[] {
     .all()
     .map(r => r.label)
     .filter(l => l.length > 0)
+}
+
+// --- Case color overrides (user-chosen colors; see case_colors in drizzle/schema.ts) ---
+
+export function getAllCaseColors(): CaseColorOverride[] {
+  return db
+    .select({ caseLabel: caseColors.caseLabel, color: caseColors.color })
+    .from(caseColors)
+    .orderBy(caseColors.caseLabel)
+    .all()
+}
+
+/**
+ * Pin a case to a color (insert or replace), keyed by the normalized label so
+ * "Smith v. Jones" and "smith v.  jones" share one override.
+ * Notifies the wallpaper worker (HOOK-04): colors are visible on the wallpaper.
+ */
+export function setCaseColor(caseLabel: string, color: string): CaseColorOverride {
+  const caseKey = caseColorKey(caseLabel)
+  const row = db
+    .insert(caseColors)
+    .values({ caseKey, caseLabel, color })
+    .onConflictDoUpdate({
+      target: caseColors.caseKey,
+      set: { caseLabel, color, updatedAt: sql`(CURRENT_TIMESTAMP)` },
+    })
+    .returning({ caseLabel: caseColors.caseLabel, color: caseColors.color })
+    .get()
+  if (!row) throw new Error('Upsert returned no result')
+  notifyMutation()
+  return row
+}
+
+/** Remove a case's override (back to its automatic color). Returns false if none existed. */
+export function deleteCaseColor(caseLabel: string): boolean {
+  const result = db.delete(caseColors).where(eq(caseColors.caseKey, caseColorKey(caseLabel))).run()
+  if (result.changes > 0) notifyMutation()
+  return result.changes > 0
 }

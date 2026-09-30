@@ -10,6 +10,9 @@ import { SettingsPage } from './settings.js'
 // TYPE-01..04: Settings page — types list, AddTypeRow, no FilterBar
 
 vi.mock('@/client/lib/api.js', () => ({
+  getCaseColors: vi.fn().mockResolvedValue([]),
+  setCaseColor: vi.fn().mockResolvedValue({}),
+  resetCaseColor: vi.fn().mockResolvedValue(undefined),
   getDeadlineTypes: vi.fn().mockResolvedValue([]),
   getDeadlines: vi.fn().mockResolvedValue([]),
   getCaseLabels: vi.fn().mockResolvedValue([]),
