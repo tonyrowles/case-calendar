@@ -1,10 +1,12 @@
 import { db, sqlite } from './db.js'
-import { appSettings, archivedCases, caseColors, deadlines, deadlineTypes } from '../../drizzle/schema.js'
+import { appSettings, archivedCases, caseColors, deadlines, deadlineTypes, emailImports } from '../../drizzle/schema.js'
 import { desc, eq, sql } from 'drizzle-orm'
 import type { DeadlineUpdate } from '../shared/schemas/deadline.js'
 import type { DeadlineTypeCreate, DeadlineTypeUpdate } from '../shared/schemas/deadlineType.js'
 import { caseColorKey, type CaseColorOverride } from '../shared/lib/case-colors.js'
 import type { CaseSummary } from '../shared/schemas/cases.js'
+import type { EmailImport, EmailImportStatus } from '../shared/schemas/email-imports.js'
+import type { DeadlineProposal } from '../shared/schemas/imports.js'
 
 // HOOK-04: Phase 9 wallpaper worker subscribes here
 let onMutationCallback: (() => void) | null = null
@@ -278,5 +280,74 @@ export function createDeadlines(inputs: Array<{ date: string; caseLabel: string;
     for (const input of inputs) db.insert(deadlines).values(input).run()
   })()
   if (inputs.length > 0) notifyMutation()
+  return inputs.length
+}
+
+// --- Email imports (emailed orders waiting for review; see email_imports) ---
+
+type EmailImportRow = typeof emailImports.$inferSelect
+
+function toEmailImport(r: EmailImportRow): EmailImport {
+  return {
+    id: r.id,
+    fromAddress: r.fromAddress,
+    subject: r.subject,
+    receivedAt: r.receivedAt,
+    status: r.status as EmailImportStatus,
+    reason: r.reason,
+    proposals: r.proposals ? (JSON.parse(r.proposals) as DeadlineProposal[]) : [],
+  }
+}
+
+export function hasEmailImport(messageId: string): boolean {
+  return db.select({ id: emailImports.id }).from(emailImports).where(eq(emailImports.messageId, messageId)).get() !== undefined
+}
+
+export function addEmailImport(row: {
+  messageId: string
+  fromAddress: string
+  subject: string
+  receivedAt: string
+  status: EmailImportStatus
+  reason?: string | null
+  proposals?: DeadlineProposal[]
+}): void {
+  db.insert(emailImports).values({
+    ...row,
+    reason: row.reason ?? null,
+    proposals: row.proposals ? JSON.stringify(row.proposals) : null,
+  }).onConflictDoNothing().run()
+  // A new email to review shows on the wallpaper
+  if (row.status === 'pending') notifyMutation()
+}
+
+/** Pending first, then anything that wasn't imported (rejected/failed), newest first. */
+export function listEmailImports(): EmailImport[] {
+  return db.select().from(emailImports)
+    .where(sql`${emailImports.status} in ('pending', 'rejected', 'failed')`)
+    .orderBy(desc(emailImports.receivedAt))
+    .all()
+    .map(toEmailImport)
+    .sort((a, b) => Number(b.status === 'pending') - Number(a.status === 'pending'))
+}
+
+export function getEmailImport(id: number): EmailImport | null {
+  const r = db.select().from(emailImports).where(eq(emailImports.id, id)).get()
+  return r ? toEmailImport(r) : null
+}
+
+export function setEmailImportStatus(id: number, status: EmailImportStatus): boolean {
+  const changed = db.update(emailImports).set({ status }).where(eq(emailImports.id, id)).run().changes > 0
+  if (changed) notifyMutation()
+  return changed
+}
+
+/** Save the reviewed deadlines and mark the email done, in one transaction. */
+export function acceptEmailImport(id: number, inputs: Array<{ date: string; caseLabel: string; typeId: number; description?: string }>): number {
+  sqlite.transaction(() => {
+    for (const input of inputs) db.insert(deadlines).values(input).run()
+    db.update(emailImports).set({ status: 'done' }).where(eq(emailImports.id, id)).run()
+  })()
+  notifyMutation()
   return inputs.length
 }

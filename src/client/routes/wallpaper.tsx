@@ -4,7 +4,7 @@ import { addDays, format, startOfWeek } from 'date-fns'
 import { useSearchParams } from 'react-router-dom'
 import { Calendar as CalendarIcon } from 'lucide-react'
 
-import { getDeadlines, getSettings, wallpaperBackgroundUrl } from '@/client/lib/api.js'
+import { getDeadlines, getEmailInbox, getSettings, wallpaperBackgroundUrl } from '@/client/lib/api.js'
 import { parseLocalDate, toISODateString } from '@/shared/lib/date.js'
 import { groupByBucket } from '@/shared/lib/buckets.js'
 import { caseTextColor, liftForDarkBackground } from '@/shared/lib/case-colors.js'
@@ -201,6 +201,9 @@ export function WallpaperView(): React.JSX.Element {
   // Theme: ?theme= (previews) > saved setting (Settings > Wallpaper) > default. If settings
   // can't be loaded, fall back to the default rather than failing the wallpaper.
   const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: getSettings, retry: false })
+  // Emailed orders waiting for review: shown as a reminder so they can't be forgotten
+  const inboxQuery = useQuery({ queryKey: ['email-imports'], queryFn: getEmailInbox, retry: false })
+  const pendingEmails = inboxQuery.data?.items.filter(i => i.status === 'pending').length ?? 0
   const themeParam = searchParams.get('theme')
   const themeId = isWallpaperThemeId(themeParam) ? themeParam : (settingsQuery.data?.wallpaperTheme ?? DEFAULT_WALLPAPER_THEME)
   const theme = WALLPAPER_THEMES[themeId]
@@ -290,8 +293,16 @@ export function WallpaperView(): React.JSX.Element {
         className="items-baseline pb-4 border-b-2 border-border mb-8"
         style={{ display: 'grid', gridTemplateColumns: `minmax(0, 1fr) ${LIST_W}px`, gap: '96px' }}
       >
-        <div data-testid="wallpaper-range" className="text-5xl font-semibold text-foreground">
-          {format(rangeStart, 'MMM d')} – {format(rangeEnd, 'MMM d, yyyy')}
+        <div className="flex items-baseline gap-8">
+          <div data-testid="wallpaper-range" className="text-5xl font-semibold text-foreground">
+            {format(rangeStart, 'MMM d')} – {format(rangeEnd, 'MMM d, yyyy')}
+          </div>
+          {pendingEmails > 0 && (
+            <div data-testid="wallpaper-inbox-reminder" className="rounded-md px-4 py-1 text-3xl font-semibold"
+              style={{ backgroundColor: theme.today.fill, color: theme.today.text, boxShadow: `inset 0 0 0 2px ${theme.today.ring}` }}>
+              {pendingEmails === 1 ? '1 emailed order to review' : `${pendingEmails} emailed orders to review`}
+            </div>
+          )}
         </div>
         <div data-testid="wallpaper-today-date" className="text-4xl text-muted-foreground">
           {format(today, 'EEEE, MMMM d')}

@@ -13,6 +13,10 @@ import { WALLPAPER_THEMES } from '@/shared/lib/wallpaper-themes.js'
 
 // Mock the api module so WallpaperView doesn't fire real fetch calls in tests
 vi.mock('@/client/lib/api.js', () => ({
+  getEmailInbox: vi.fn().mockResolvedValue({ enabled: false, address: null, items: [], lastCheck: null }),
+  checkEmailInbox: vi.fn().mockResolvedValue({ enabled: false, address: null, items: [], lastCheck: null }),
+  acceptEmailImport: vi.fn().mockResolvedValue({ created: 0 }),
+  dismissEmailImport: vi.fn().mockResolvedValue(undefined),
   extractDeadlines: vi.fn().mockResolvedValue({ proposals: [] }),
   createDeadlinesBulk: vi.fn().mockResolvedValue({ created: 0 }),
   getCases: vi.fn().mockResolvedValue([]),
@@ -546,5 +550,28 @@ describe('Wallpaper themes', () => {
     const lifted = badgeColor('dark')
     expect(lifted).not.toBe('#000075')
     expect(contrastRatio(lifted, WALLPAPER_THEMES.dark.darkBackground!)).toBeGreaterThanOrEqual(3)
+  })
+})
+
+describe('Wallpaper inbox reminder', () => {
+  function renderWithInbox(pending: number) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    qc.setQueryData(['deadlines'], [])
+    qc.setQueryData(['deadline-types'], [])
+    qc.setQueryData(['settings'], { wallpaperTheme: 'light', wallpaperBackground: null })
+    qc.setQueryData(['case-colors'], [])
+    qc.setQueryData(['email-imports'], {
+      enabled: true, address: 'x+calendar@gmail.com', lastCheck: null,
+      items: Array.from({ length: pending }, (_, i) => ({ id: i + 1, fromAddress: 'x@gmail.com', subject: 's', receivedAt: '2026-09-30T00:00:00Z', status: 'pending', reason: null, proposals: [] })),
+    })
+    return render(<QueryClientProvider client={qc}><MemoryRouter><WallpaperView /></MemoryRouter></QueryClientProvider>)
+  }
+
+  it('shows "N emailed orders to review" only when some are pending', () => {
+    const { container } = renderWithInbox(2)
+    expect(container.querySelector('[data-testid="wallpaper-inbox-reminder"]')!.textContent).toBe('2 emailed orders to review')
+    cleanup()
+    const none = renderWithInbox(0)
+    expect(none.container.querySelector('[data-testid="wallpaper-inbox-reminder"]')).toBeNull()
   })
 })

@@ -42,6 +42,27 @@ export const archivedCases = sqliteTable('archived_cases', {
 })
 
 /**
+ * Emails sent to the import address (EMAIL_IMPORT_ADDRESS). One row per message, keyed
+ * by Message-ID so a message is never processed twice.
+ *   pending   - proposals extracted, waiting for the user to review (nothing saved yet)
+ *   done      - the user added the reviewed deadlines
+ *   dismissed - the user dismissed it
+ *   rejected  - sender not allowed / not verified (never sent to the model)
+ *   failed    - extraction failed (reason says why)
+ */
+export const emailImports = sqliteTable('email_imports', {
+  id: integer({ mode: 'number' }).primaryKey({ autoIncrement: true }),
+  messageId: text().notNull().unique(),
+  fromAddress: text().notNull(),
+  subject: text().notNull(),
+  receivedAt: text().notNull(),       // ISO timestamp from the message Date header
+  status: text().notNull(),
+  reason: text(),
+  proposals: text(),                  // JSON DeadlineProposal[] (pending/done)
+  createdAt: text().notNull().default(sql`(CURRENT_TIMESTAMP)`),
+})
+
+/**
  * App settings as key/value rows (e.g. key 'wallpaperTheme'). Missing key = default.
  */
 export const appSettings = sqliteTable('app_settings', {
