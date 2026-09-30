@@ -9,6 +9,7 @@ import { DeadlineForm } from './components/DeadlineForm.js'
 vi.mock('./lib/api.js', () => ({
   getDeadlineTypes: vi.fn().mockResolvedValue([]),
   getCaseLabels: vi.fn().mockResolvedValue([]),
+  getDeadlines: vi.fn().mockResolvedValue([]),
   createDeadline: vi.fn().mockResolvedValue({}),
 }))
 

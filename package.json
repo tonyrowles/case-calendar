@@ -26,10 +26,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
-    "@fullcalendar/core": "^6.1.20",
-    "@fullcalendar/daygrid": "^6.1.20",
-    "@fullcalendar/interaction": "^6.1.20",
-    "@fullcalendar/react": "^6.1.20",
     "@hono/node-server": "^2.0.3",
     "@hono/zod-validator": "^0.8.0",
     "@hookform/resolvers": "^5.2.2",

@@ -17,17 +17,17 @@ export function DateRangeSelect(): React.JSX.Element {
       onValueChange={(v) => setRange(v as DateRange)}
     >
       <SelectTrigger
-        className="h-9 min-w-[120px]"
+        className="h-9 w-[140px]"
         aria-label="Date range filter"
       >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
+        <SelectItem value="all">All</SelectItem>
         <SelectItem value="overdue">Overdue</SelectItem>
         <SelectItem value="today">Today</SelectItem>
         <SelectItem value="this-week">This Week</SelectItem>
         <SelectItem value="this-month">This Month</SelectItem>
-        <SelectItem value="all">All</SelectItem>
       </SelectContent>
     </Select>
   )

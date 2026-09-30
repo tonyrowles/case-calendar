@@ -30,6 +30,7 @@ import {
 import { Calendar } from '@/client/components/ui/calendar.js'
 import { ErrorBanner } from './ErrorBanner.js'
 import { CaseLabelInput } from './CaseLabelInput.js'
+import { useCaseColors } from '@/client/hooks/useCaseColors.js'
 
 export interface DeadlineFormProps {
   /** YYYY-MM-DD string; when changed, drives the date field via setValue + scrolls form + focuses case-label input */
@@ -69,6 +70,7 @@ export function DeadlineForm({ selectedDate, deadline, prefillValues, onCancel, 
     queryFn: getCaseLabels,
   })
   const caseLabels = caseLabelsQuery.data ?? []
+  const caseColorOf = useCaseColors()
 
   const {
     register,
@@ -267,6 +269,7 @@ export function DeadlineForm({ selectedDate, deadline, prefillValues, onCancel, 
                 id="caseLabel"
                 value={field.value ?? ''}
                 labels={caseLabels}
+                caseColorOf={caseColorOf}
                 onChange={field.onChange}
                 onBlur={field.onBlur}
                 inputRef={field.ref}

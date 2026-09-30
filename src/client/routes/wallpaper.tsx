@@ -7,7 +7,8 @@ import { Calendar as CalendarIcon } from 'lucide-react'
 import { getDeadlines } from '@/client/lib/api.js'
 import { parseLocalDate, toISODateString } from '@/shared/lib/date.js'
 import { groupByBucket } from '@/shared/lib/buckets.js'
-import { assignCaseColors, caseColor, caseTextColor } from '@/shared/lib/case-colors.js'
+import { caseTextColor } from '@/shared/lib/case-colors.js'
+import { useCaseColors } from '@/client/hooks/useCaseColors.js'
 import { useTypeColors } from '@/client/hooks/useTypeColors.js'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
 
@@ -27,8 +28,8 @@ const MAX_PER_CELL = 3   // calendar cell overflow → "+N more"
 // Shared across sections in order, so overflow is always an explicit "+N more", never clipped.
 const LIST_ROW_BUDGET = 14
 
-// Colors come from the case (assigned per wallpaper so shown cases don't collide);
-// types are shown by name only.
+// Colors come from the case (useCaseColors, shared with the main app); types are
+// shown by name only.
 type ColorFns = {
   typesById: Map<number, DeadlineType>
   caseColorOf: (caseLabel: string) => string
@@ -210,11 +211,9 @@ export function WallpaperView(): React.JSX.Element {
   // deadlines only appear (dimmed) on the calendar, never in the list.
   const active = useMemo(() => deadlines.filter(d => d.completedAt === null), [deadlines])
   const buckets = useMemo(() => groupByBucket(active, todayStr), [active, todayStr])
-  const caseColors = useMemo(() => assignCaseColors(active.map(d => d.caseLabel)), [active])
-  const colors: ColorFns = {
-    typesById,
-    caseColorOf: (label: string) => caseColors.get(label) ?? caseColor(label),
-  }
+  // Same case colors as the main app (assigned across all open deadlines)
+  const caseColorOf = useCaseColors()
+  const colors: ColorFns = { typesById, caseColorOf }
   const allEmpty =
     buckets.today.length + buckets.thisWeek.length + buckets.nextWeek.length + buckets.later.length === 0
 

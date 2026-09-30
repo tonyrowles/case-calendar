@@ -13,7 +13,7 @@ afterEach(() => cleanup())
 
 const TYPE_FILING: DeadlineType = { id: 1, name: 'Filing', color: '#1D4ED8', createdAt: '' }
 const typesById = new Map([[1, TYPE_FILING]])
-const getColor = (_id: number) => '#1D4ED8'
+const caseColorOf = (_label: string) => '#1D4ED8'
 
 function makeDeadline(overrides: Partial<Deadline> = {}): Deadline {
   return {
@@ -43,7 +43,7 @@ describe('BucketSection — Wave 0 stubs (VIEW-03)', () => {
         bucketLabel="Overdue"
         deadlines={sampleDeadlines}
         typesById={typesById}
-        getColor={getColor}
+        caseColorOf={caseColorOf}
       />
     )
     // Use expanded:true to find the toggle button specifically
@@ -61,7 +61,7 @@ describe('BucketSection — Wave 0 stubs (VIEW-03)', () => {
         bucketLabel="Overdue"
         deadlines={sampleDeadlines}
         typesById={typesById}
-        getColor={getColor}
+        caseColorOf={caseColorOf}
       />
     )
     const button = screen.getByRole('button', { expanded: true })
@@ -82,7 +82,7 @@ describe('BucketSection — Wave 0 stubs (VIEW-03)', () => {
         bucketLabel="Overdue"
         deadlines={sampleDeadlines}
         typesById={typesById}
-        getColor={getColor}
+        caseColorOf={caseColorOf}
       />
     )
     const body = document.getElementById('bucket-overdue-body')
@@ -98,7 +98,7 @@ describe('BucketSection — Wave 0 stubs (VIEW-03)', () => {
         bucketLabel="Overdue"
         deadlines={sampleDeadlines}
         typesById={typesById}
-        getColor={getColor}
+        caseColorOf={caseColorOf}
       />
     )
     // Bucket name

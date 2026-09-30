@@ -9,7 +9,7 @@ export interface BucketSectionProps {
   bucketLabel: string
   deadlines: Deadline[]
   typesById: Map<number, DeadlineType>
-  getColor: (id: number) => string
+  caseColorOf: (caseLabel: string) => string
   onRowClick?: (id: number) => void
   onComplete?: (id: number, completed: boolean) => void
   onDelete?: (id: number, onError: () => void) => void
@@ -24,7 +24,7 @@ export function BucketSection({
   bucketLabel,
   deadlines,
   typesById,
-  getColor,
+  caseColorOf,
   onRowClick,
   onComplete,
   onDelete,
@@ -70,7 +70,7 @@ export function BucketSection({
               deadline={deadline}
               bucket={bucketId}
               typesById={typesById}
-              getColor={getColor}
+              caseColorOf={caseColorOf}
               onRowClick={onRowClick}
               onComplete={onComplete}
               onDelete={onDelete}

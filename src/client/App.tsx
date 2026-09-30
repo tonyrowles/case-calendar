@@ -1,15 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { DeadlineForm } from './components/DeadlineForm.js'
-import { CalendarView } from './components/calendar/CalendarView.js'
-import type { CalendarViewHandle } from './components/calendar/CalendarView.js'
 import { ListView } from './components/list/ListView.js'
 import { FilterBar } from './components/filters/FilterBar.js'
 import { PaneLayout } from './components/layout/PaneLayout.js'
 import { ShortcutsDialog } from './components/help/ShortcutsDialog.js'
 import { CommandPaletteShell } from './components/help/CommandPaletteShell.js'
-import { JumpToDateDialog } from './components/JumpToDateDialog.js'
 import { useFilters } from './hooks/useFilters.js'
 import { useDeadlineMutations } from './hooks/useDeadlineMutations.js'
 import { useDocumentTitle } from './hooks/useDocumentTitle.js'
@@ -19,13 +16,6 @@ import { getDeadlines } from './lib/api.js'
 import { toISODateString } from '@/shared/lib/date.js'
 
 export function App() {
-  const [view, setView] = useState<'list' | 'calendar'>(() => {
-    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('cc-view') : null
-    return stored === 'calendar' ? 'calendar' : 'list'
-  })
-
-  const [selectedDate, setSelectedDate] = useState<string>('')
-
   // Phase 4: selectedDeadlineId — when set, DeadlineForm enters edit mode
   const [selectedDeadlineId, setSelectedDeadlineId] = useState<number | null>(null)
 
@@ -33,7 +23,6 @@ export function App() {
   const [selectedDeadlineIndex, setSelectedDeadlineIndex] = useState<number | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [commandKOpen, setCommandKOpen] = useState(false)
-  const [jumpDialogOpen, setJumpDialogOpen] = useState(false)
   const [deleteTriggerSignal, setDeleteTriggerSignal] = useState<{ id: number; nonce: number } | null>(null)
 
   // POLISH-04: duplicate source — when set, DeadlineForm receives prefillValues
@@ -42,21 +31,6 @@ export function App() {
   // Phase 11 NL-01/NL-03: nlSource — when set, DeadlineForm receives prefillValues from the NL parser.
   // Mirrors duplicateSource pattern (POLISH-04); nlSource takes precedence in the merged prefillValues.
   const [nlSource, setNlSource] = useState<import('./lib/api.js').ParsedDeadlineResult | null>(null)
-
-  // Phase 5: imperative ref to CalendarView for 't' shortcut
-  const calendarRef = useRef<CalendarViewHandle>(null)
-
-  useEffect(() => {
-    localStorage.setItem('cc-view', view)
-  }, [view])
-
-  function handleDateClick(dateStr: string) {
-    // React 19 batches both setState calls into one render; DeadlineForm's selectedDate
-    // effect fires AFTER the list-view DOM is mounted, so scrollIntoView and setFocus
-    // resolve against the final layout.
-    setSelectedDate(dateStr)
-    setView('list')
-  }
 
   const deadlinesQuery = useQuery({
     queryKey: ['deadlines'],
@@ -145,17 +119,6 @@ export function App() {
     }
   }, [selectedDeadlineIndex, filteredDeadlines])
 
-  // KBD-04: 't' — jump calendar to today. If calendar is not mounted (tier='one', view='list'),
-  // switch to calendar view first; user can press 't' again once it mounts.
-  const onJumpToday = useCallback(() => {
-    if (calendarRef.current) {
-      calendarRef.current.jumpToToday()
-    } else {
-      // Calendar not mounted; switch to calendar view so it mounts on next render
-      setView('calendar')
-    }
-  }, [])
-
   // KBD-05: 'j' — advance selection by one, clamped at list top boundary.
   const onMoveNext = useCallback(() => {
     if (filteredDeadlines.length === 0) return
@@ -186,11 +149,6 @@ export function App() {
     setCommandKOpen(true)
   }, [])
 
-  // POLISH-02: 'g' — open jump-to-date dialog.
-  const onJumpToDate = useCallback(() => {
-    setJumpDialogOpen(true)
-  }, [])
-
   // POLISH-04: lookup the source deadline by id and set as duplicate source.
   // NL-01 mutual exclusion: clear nlSource so prefillValues sources are mutually exclusive
   // (mirrors the onParsed handler which clears duplicateSource — RESEARCH.md Pitfall 6).
@@ -205,28 +163,13 @@ export function App() {
     onNewDeadline,
     onEditSelected,
     onDeleteSelected,
-    onJumpToday,
     onMoveNext,
     onMovePrev,
     onOpenHelp,
     onOpenCommandK,
-    onJumpToDate,
   })
 
   // ── Slot content ─────────────────────────────────────────────────────────────
-
-  const calendarSlot = (
-    <section className="rounded-lg border bg-card p-4 shadow-sm h-full">
-      <CalendarView
-        ref={calendarRef}
-        onDateClick={handleDateClick}
-        deadlines={filteredDeadlines}
-        todayStr={todayStr}
-        onEventClick={(id) => selectDeadline(id === selectedDeadlineId ? -1 : id)}
-        onDuplicate={onDuplicate}
-      />
-    </section>
-  )
 
   const listSlot = (
     <ListView
@@ -290,7 +233,6 @@ export function App() {
         </div>
       )}
       <DeadlineForm
-        selectedDate={selectedDate}
         deadline={selectedDeadline}
         prefillValues={prefillValues}
         onCancel={() => {
@@ -324,9 +266,6 @@ export function App() {
 
         <PaneLayout
           filterBar={<FilterBar />}
-          view={view}
-          onViewChange={setView}
-          calendar={calendarSlot}
           list={listSlot}
           form={formSlot}
         />
@@ -345,14 +284,6 @@ export function App() {
             setSelectedDeadlineId(null)
             setSelectedDeadlineIndex(null)
             // Palette closes itself via onOpenChange(false) inside CommandPaletteShell.onSuccess
-          }}
-        />
-        <JumpToDateDialog
-          open={jumpDialogOpen}
-          onOpenChange={setJumpDialogOpen}
-          onDateSelect={(isoDateStr) => {
-            setJumpDialogOpen(false)
-            calendarRef.current?.jumpToDate(isoDateStr)
           }}
         />
       </main>

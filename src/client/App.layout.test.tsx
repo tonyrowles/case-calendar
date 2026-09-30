@@ -117,65 +117,34 @@ describe('App layout integration', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(PINNED_DATE)
-    localStorage.removeItem('cc-view')
     ;(useBreakpoint as ReturnType<typeof vi.fn>).mockReset()
   })
 
   afterEach(() => {
     vi.useRealTimers()
-    localStorage.removeItem('cc-view')
     cleanup()
   })
 
-  it("at tier='three', both ListView and CalendarView render simultaneously (VIEW-06)", async () => {
-    mockTier('three')
-    renderApp('/?range=all', qc => {
-      qc.setQueryData(['deadlines'], deadlineFixtures)
-      qc.setQueryData(['deadline-types'], [TYPE_FILING])
-      qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
+  for (const tier of ['three', 'two'] as const) {
+    it(`at tier='${tier}', list and form render side by side; no calendar and no view toggle`, async () => {
+      mockTier(tier)
+      renderApp('/?range=all', qc => {
+        qc.setQueryData(['deadlines'], deadlineFixtures)
+        qc.setQueryData(['deadline-types'], [TYPE_FILING])
+        qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
+      })
+
+      await waitFor(() => {
+        expect(screen.queryByText('Add Deadline')).toBeTruthy()
+      }, { timeout: 3000 })
+
+      expect(screen.queryByLabelText(/Deadlines list/i)).toBeTruthy()
+      expect(document.querySelector('[data-group]')).toBeTruthy()
+      // The calendar view was removed (the desktop wallpaper is the calendar)
+      expect(document.querySelector('.fc')).toBeNull()
+      expect(screen.getAllByRole('button').find(b => b.textContent === 'Calendar')).toBeUndefined()
     })
-
-    // Wait for the Add Deadline heading (form is mounted)
-    await waitFor(() => {
-      expect(screen.queryByText('Add Deadline')).toBeTruthy()
-    }, { timeout: 3000 })
-
-    // ListView container renders
-    expect(screen.queryByLabelText(/Deadlines list/i)).toBeTruthy()
-
-    // CalendarView renders — FullCalendar generates a .fc element
-    expect(document.querySelector('.fc')).toBeTruthy()
-  })
-
-  it("at tier='two', only the slot matching the view toggle renders", async () => {
-    mockTier('two')
-    localStorage.setItem('cc-view', 'list')
-    renderApp('/?range=all', qc => {
-      qc.setQueryData(['deadlines'], deadlineFixtures)
-      qc.setQueryData(['deadline-types'], [TYPE_FILING])
-      qc.setQueryData(['case-labels'], ['Smith v. Jones'])
-    })
-
-    await waitFor(() => {
-      expect(screen.queryByText('Add Deadline')).toBeTruthy()
-    }, { timeout: 3000 })
-
-    // list view is active → ListView present, CalendarView absent
-    expect(screen.queryByLabelText(/Deadlines list/i)).toBeTruthy()
-    expect(document.querySelector('.fc')).toBeNull()
-
-    // Switch to calendar via the toggle
-    const calendarBtn = screen.getAllByRole('button').find(b => b.textContent === 'Calendar')
-    expect(calendarBtn).toBeTruthy()
-    fireEvent.click(calendarBtn!)
-
-    await waitFor(() => {
-      expect(document.querySelector('.fc')).toBeTruthy()
-    }, { timeout: 3000 })
-
-    // ListView should now be absent
-    expect(screen.queryByLabelText(/Deadlines list/i)).toBeNull()
-  })
+  }
 
   it("at tier='one', no ResizablePanelGroup in DOM", async () => {
     mockTier('one')
@@ -264,30 +233,6 @@ describe('App layout integration', () => {
       // At least one row has the selected highlight
       const hasHighlight = rows.some(r => r.className.includes('bg-primary/10'))
       expect(hasHighlight).toBe(true)
-    }, { timeout: 3000 })
-  })
-
-  it("pressing g opens JumpToDateDialog (POLISH-02 wiring)", async () => {
-    mockTier('three')
-    renderApp('/?range=all', qc => {
-      qc.setQueryData(['deadlines'], [])
-      qc.setQueryData(['deadline-types'], [TYPE_FILING])
-      qc.setQueryData(['case-labels'], [])
-    })
-
-    await waitFor(() => {
-      expect(screen.queryByText('Add Deadline')).toBeTruthy()
-    }, { timeout: 3000 })
-
-    // Dialog should not be open initially
-    expect(screen.queryByText('Go to date')).toBeNull()
-
-    // Fire 'g' from the window (not from an input)
-    fireEvent.keyDown(window, { key: 'g' })
-
-    // JumpToDateDialog should now be open with its title
-    await waitFor(() => {
-      expect(screen.queryByText('Go to date')).toBeTruthy()
     }, { timeout: 3000 })
   })
 

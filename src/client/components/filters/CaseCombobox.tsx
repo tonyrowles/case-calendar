@@ -14,10 +14,13 @@ import {
   CommandList,
 } from '@/client/components/ui/command.js'
 import { cn } from '@/client/lib/utils.js'
+import { useCaseColors } from '@/client/hooks/useCaseColors.js'
+import { CaseSwatch } from '@/client/components/CaseBadge.js'
 
 export function CaseCombobox(): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const { filters, setCase } = useFilters()
+  const caseColorOf = useCaseColors()
 
   const labelsQuery = useQuery({
     queryKey: ['case-labels'],
@@ -64,7 +67,8 @@ export function CaseCombobox(): React.JSX.Element {
                   {filters.case === label && (
                     <Check className="size-4 mr-2 shrink-0" />
                   )}
-                  {label}
+                  <CaseSwatch color={caseColorOf(label)} />
+                  <span className="ml-2 truncate">{label}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

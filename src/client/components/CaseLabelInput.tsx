@@ -3,12 +3,15 @@ import { Plus } from 'lucide-react'
 
 import { Input } from '@/client/components/ui/input.js'
 import { cn } from '@/client/lib/utils.js'
+import { CaseSwatch } from '@/client/components/CaseBadge.js'
 import { findExistingCase, suggestCases } from '@/shared/lib/case-labels.js'
 
 export interface CaseLabelInputProps {
   id: string
   value: string
   labels: readonly string[]
+  /** Optional case -> color, shown as a swatch next to each existing case */
+  caseColorOf?: (caseLabel: string) => string
   onChange: (value: string) => void
   onBlur?: () => void
   inputRef?: React.Ref<HTMLInputElement>
@@ -25,7 +28,7 @@ type Option = { kind: 'existing'; label: string } | { kind: 'new'; label: string
  * snaps to the existing label so the same case is never saved under two spellings.
  */
 export function CaseLabelInput({
-  id, value, labels, onChange, onBlur, inputRef, placeholder, ...aria
+  id, value, labels, caseColorOf, onChange, onBlur, inputRef, placeholder, ...aria
 }: CaseLabelInputProps): React.JSX.Element {
   const listId = useId()
   const [open, setOpen] = useState(false)
@@ -119,7 +122,7 @@ export function CaseLabelInput({
             >
               {opt.kind === 'new'
                 ? <><Plus className="size-4 shrink-0" aria-hidden="true" /><span>Add new case "<span className="text-foreground">{opt.label}</span>"</span></>
-                : opt.label}
+                : <>{caseColorOf && <CaseSwatch color={caseColorOf(opt.label)} />}<span>{opt.label}</span></>}
             </li>
           ))}
         </ul>

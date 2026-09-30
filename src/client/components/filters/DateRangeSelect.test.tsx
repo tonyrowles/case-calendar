@@ -2,7 +2,7 @@
 // Wave 2 — converted from it.todo stubs to live it() tests.
 //
 // Requirements: FILT-03 (date range preset — 5 options: Overdue, Today, This Week, This Month, All)
-// Default = this-week; selecting default removes ?range= (default-elision)
+// Default = all; selecting default removes ?range= (default-elision)
 import React from 'react'
 import { describe, it, expect, afterEach, beforeAll } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
@@ -70,11 +70,11 @@ function renderDateRangeSelect(initialEntry: string): {
 }
 
 describe('DateRangeSelect — Wave 0 stubs (FILT-03)', () => {
-  it('DRS1: default this-week preset is shown when ?range= is absent from URL', () => {
+  it('DRS1: default "All" preset is shown when ?range= is absent from URL', () => {
     renderDateRangeSelect('/')
-    // The SelectTrigger should show 'This Week' as the selected option (via SelectValue)
+    // The SelectTrigger should show 'All' as the selected option (via SelectValue)
     const trigger = screen.getByRole('combobox', { name: /date range filter/i })
-    expect(trigger.textContent).toContain('This Week')
+    expect(trigger.textContent).toContain('All')
   })
 
   it('DRS2: selecting "overdue" preset writes ?range=overdue to URL', async () => {
@@ -98,7 +98,7 @@ describe('DateRangeSelect — Wave 0 stubs (FILT-03)', () => {
     })
   })
 
-  it('DRS3: selecting "this-week" explicitly removes ?range= from URL (default-elision)', async () => {
+  it('DRS3: selecting "All" explicitly removes ?range= from URL (default-elision)', async () => {
     const { locationRef } = renderDateRangeSelect('/?range=overdue')
 
     const trigger = screen.getByRole('combobox', { name: /date range filter/i })
@@ -108,14 +108,14 @@ describe('DateRangeSelect — Wave 0 stubs (FILT-03)', () => {
     // Wait for the dropdown to render
     await waitFor(() => {
       // The Select Content should render in portal — look for option text
-      const options = screen.queryAllByText('This Week')
+      const options = screen.queryAllByText('All')
       expect(options.length).toBeGreaterThan(0)
     })
 
-    // Get all 'This Week' text nodes — the option in the list (not the trigger value)
-    const thisWeekOptions = screen.queryAllByText('This Week')
+    // Get all 'All' text nodes — the option in the list (not the trigger value)
+    const allOptions = screen.queryAllByText('All')
     // Click the one inside the SelectContent (last one to avoid the trigger value)
-    fireEvent.click(thisWeekOptions[thisWeekOptions.length - 1])
+    fireEvent.click(allOptions[allOptions.length - 1])
 
     await waitFor(() => {
       expect(locationRef.current).not.toContain('range=')
@@ -132,10 +132,10 @@ describe('DateRangeSelect — Wave 0 stubs (FILT-03)', () => {
     await waitFor(() => {
       expect(screen.queryByText('Overdue')).not.toBeNull()
       expect(screen.queryByText('Today')).not.toBeNull()
+      expect(screen.queryByText('This Week')).not.toBeNull()
       expect(screen.queryByText('This Month')).not.toBeNull()
-      expect(screen.queryByText('All')).not.toBeNull()
-      // This Week appears in trigger + list
-      expect(screen.queryAllByText('This Week').length).toBeGreaterThan(0)
+      // All appears in trigger + list
+      expect(screen.queryAllByText('All').length).toBeGreaterThan(0)
     })
   })
 })

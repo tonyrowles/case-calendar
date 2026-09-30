@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Integration: edit/delete/complete reflected in both calendar+list views
+// Integration: edit/delete/complete reflected in the list view
 // Requirements: CRUD-03 (edit), CRUD-04 (delete), CRUD-05 (complete), CRUD-06 (show-completed), CRUD-07 (checkbox UX)
 import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -101,7 +101,7 @@ describe('App — CRUD integration (CRUD-03/04/05/06/07)', () => {
     expect(screen.getByRole('button', { name: /cancel/i })).toBeTruthy()
   })
 
-  it('saving an edit patches the deadline and the update is reflected in both list and calendar', async () => {
+  it('saving an edit patches the deadline and the update is reflected in the list', async () => {
     const { getDeadlines, updateDeadline } = await import('./lib/api.js')
 
     // Mock PATCH to return updated deadline
@@ -143,7 +143,7 @@ describe('App — CRUD integration (CRUD-03/04/05/06/07)', () => {
     }, { timeout: 3000 })
   })
 
-  it('deleting a deadline removes it from both the list view and the calendar', async () => {
+  it('deleting a deadline removes it from the list view', async () => {
     const { deleteDeadline } = await import('./lib/api.js')
     vi.mocked(deleteDeadline).mockResolvedValueOnce(undefined)
 

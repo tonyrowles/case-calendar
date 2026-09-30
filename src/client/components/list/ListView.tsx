@@ -3,6 +3,7 @@ import { groupByBucket } from '@/shared/lib/buckets.js'
 import type { Bucket } from '@/shared/lib/buckets.js'
 import type { Deadline } from '@/shared/schemas/deadline.js'
 import { useTypeColors } from '@/client/hooks/useTypeColors.js'
+import { useCaseColors } from '@/client/hooks/useCaseColors.js'
 import { EmptyState } from '@/client/components/EmptyState.js'
 import { BucketSection } from './BucketSection.js'
 
@@ -45,7 +46,8 @@ export function ListView({
   selectedDeadlineId,
   deleteTriggerSignal,
 }: ListViewProps): React.JSX.Element {
-  const { typesById, getColor } = useTypeColors()
+  const { typesById } = useTypeColors()
+  const caseColorOf = useCaseColors()
 
   if (isLoading) {
     return (
@@ -126,7 +128,7 @@ export function ListView({
           bucketLabel={BUCKET_LABELS[bucketId]}
           deadlines={buckets[bucketId]}
           typesById={typesById}
-          getColor={getColor}
+          caseColorOf={caseColorOf}
           onRowClick={onRowClick}
           onComplete={onComplete}
           onDelete={onDelete}

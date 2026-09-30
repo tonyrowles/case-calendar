@@ -35,14 +35,6 @@ export function ShortcutsDialog(props: ShortcutsDialogProps): React.JSX.Element 
               <td className="pl-3 text-muted-foreground">Delete selected (2-step)</td>
             </tr>
             <tr>
-              <td><kbd className={KBD_CLASS}>t</kbd></td>
-              <td className="pl-3 text-muted-foreground">Jump calendar to today</td>
-            </tr>
-            <tr>
-              <td><kbd className={KBD_CLASS}>g</kbd></td>
-              <td className="pl-3 text-muted-foreground">Jump to date</td>
-            </tr>
-            <tr>
               <td>
                 <kbd className={KBD_CLASS}>j</kbd>
                 {' / '}
