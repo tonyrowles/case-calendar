@@ -11,6 +11,7 @@ import { toISODateString } from '@/shared/lib/date.js'
 import { App } from './App.js'
 
 vi.mock('./lib/api.js', () => ({
+  getCaseColors: vi.fn().mockResolvedValue([]),
   getDeadlines: vi.fn().mockResolvedValue([]),
   getDeadlineTypes: vi.fn().mockResolvedValue([]),
   getCaseLabels: vi.fn().mockResolvedValue([]),

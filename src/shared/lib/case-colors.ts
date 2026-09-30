@@ -69,29 +69,64 @@ export function caseColor(caseLabel: string): string {
   return CASE_PALETTE[preferredIndex(caseLabel)]
 }
 
+/** Key identifying a case for colors (and stored overrides): case/whitespace-insensitive. */
+export function caseColorKey(caseLabel: string): string {
+  return normalizeCaseLabel(caseLabel)
+}
+
+/** A user-chosen color for a case (stored in case_colors). */
+export type CaseColorOverride = { caseLabel: string; color: string }
+
 /**
- * Colors for a set of cases shown together, without collisions while there are no
- * more cases than palette entries. Each case keeps its preferred color unless an
- * earlier case (in normalized-label order) already took it; then it takes the next
- * free color. So a case's color only changes when a colliding case appears or goes.
- * Beyond the palette size, colors repeat (preferred color). Keyed by the original label.
+ * Colors for a set of cases shown together.
+ *
+ * - Overrides (user-chosen colors) win and are applied first.
+ * - Every other case keeps its preferred color unless it is already taken (by an
+ *   override or by an earlier case in normalized-label order); then it takes the next
+ *   free color. So while there are no more cases than palette entries, no two cases
+ *   share a color, and a case's color only changes when a colliding case appears/goes.
+ * - Beyond the palette size, automatic colors repeat (preferred color). Two cases can
+ *   also share a color if the user pins them to the same one.
+ *
+ * Keyed by the original label.
  */
-export function assignCaseColors(caseLabels: Iterable<string>): Map<string, string> {
+export function assignCaseColors(
+  caseLabels: Iterable<string>,
+  overrides: Iterable<CaseColorOverride> = [],
+): Map<string, string> {
+  const pinned = new Map<string, string>()
+  for (const o of overrides) pinned.set(caseColorKey(o.caseLabel), o.color)
+
   const byKey = new Map<string, string[]>()
   for (const label of caseLabels) {
-    const key = normalizeCaseLabel(label)
+    const key = caseColorKey(label)
     const list = byKey.get(key)
     if (list) { if (!list.includes(label)) list.push(label) } else byKey.set(key, [label])
   }
+
+  // Reserve every pinned color up front (even for cases not currently shown), so an
+  // automatic color never lands on a color the user picked for another case.
   const taken = new Set<number>()
+  for (const color of pinned.values()) {
+    const idx = (CASE_PALETTE as readonly string[]).indexOf(color)
+    if (idx !== -1) taken.add(idx)
+  }
+
   const result = new Map<string, string>()
   for (const key of [...byKey.keys()].sort()) {
-    let idx = fnv1a(key) % CASE_PALETTE.length
-    if (taken.size < CASE_PALETTE.length) {
-      while (taken.has(idx)) idx = (idx + 1) % CASE_PALETTE.length
-      taken.add(idx)
+    const chosen = pinned.get(key)
+    let color: string
+    if (chosen !== undefined) {
+      color = chosen
+    } else {
+      let idx = fnv1a(key) % CASE_PALETTE.length
+      if (taken.size < CASE_PALETTE.length) {
+        while (taken.has(idx)) idx = (idx + 1) % CASE_PALETTE.length
+        taken.add(idx)
+      }
+      color = CASE_PALETTE[idx]
     }
-    for (const label of byKey.get(key)!) result.set(label, CASE_PALETTE[idx])
+    for (const label of byKey.get(key)!) result.set(label, color)
   }
   return result
 }

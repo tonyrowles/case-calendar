@@ -13,6 +13,7 @@ import { CommandPaletteShell } from './CommandPaletteShell.js'
 
 // Mock the api module so no real fetch calls are made
 vi.mock('@/client/lib/api.js', () => ({
+  getCaseColors: vi.fn().mockResolvedValue([]),
   parseDeadline: vi.fn(),
   ApiError: class ApiError extends Error {
     code: string

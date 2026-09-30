@@ -1,4 +1,5 @@
 import type { Deadline, DeadlineCreate, DeadlineType, DeadlineUpdate } from '../../shared/schemas/deadline.js'
+import type { CaseColorOverride } from '../../shared/lib/case-colors.js'
 
 export type { Deadline, DeadlineCreate }
 
@@ -49,6 +50,36 @@ export async function getCaseLabels(): Promise<string[]> {
   const res = await fetch('/api/case-labels')
   if (!res.ok) throw new Error('Failed to fetch case labels')
   return res.json()
+}
+
+/** GET /api/case-colors: the cases whose color the user has chosen. */
+export async function getCaseColors(): Promise<CaseColorOverride[]> {
+  const res = await fetch('/api/case-colors')
+  if (!res.ok) throw new Error('Failed to fetch case colors')
+  return res.json()
+}
+
+/** PUT /api/case-colors: pin a case to one of the palette colors. */
+export async function setCaseColor(caseLabel: string, color: string): Promise<CaseColorOverride> {
+  const res = await fetch('/api/case-colors', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ caseLabel, color }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message ?? 'Could not save the color. Try again.')
+  }
+  return res.json()
+}
+
+/** DELETE /api/case-colors?caseLabel=: back to the automatic color (a 404 means already automatic). */
+export async function resetCaseColor(caseLabel: string): Promise<void> {
+  const res = await fetch(`/api/case-colors?caseLabel=${encodeURIComponent(caseLabel)}`, { method: 'DELETE' })
+  if (!res.ok && res.status !== 404) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message ?? 'Could not reset the color. Try again.')
+  }
 }
 
 /**

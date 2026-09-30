@@ -31,6 +31,16 @@ sqlite.exec(`
   )
 `)
 
+// Create case_colors table (user-chosen case color overrides)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS case_colors (
+    caseKey   TEXT PRIMARY KEY NOT NULL,
+    caseLabel TEXT NOT NULL,
+    color     TEXT NOT NULL,
+    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+  )
+`)
+
 // Install the updatedAt trigger (idempotent: CREATE TRIGGER IF NOT EXISTS)
 sqlite.exec(`
   CREATE TRIGGER IF NOT EXISTS set_deadlines_updated_at

@@ -26,6 +26,7 @@ const MOCK_DEADLINE: Deadline = {
 }
 
 vi.mock('@/client/lib/api.js', () => ({
+  getCaseColors: vi.fn().mockResolvedValue([]),
   getDeadlines: vi.fn().mockResolvedValue([]),
   getDeadlineTypes: vi.fn().mockResolvedValue([
     { id: 1, name: 'Filing', color: '#374151', createdAt: '2026-01-01T00:00:00Z' },
