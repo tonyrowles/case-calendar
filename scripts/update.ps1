@@ -21,8 +21,11 @@
 
 [CmdletBinding()]
 param(
-  [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot)
+  [string]$ProjectRoot = ''
 )
+
+# Windows PowerShell 5.1 leaves $PSScriptRoot empty in param() defaults; resolve here.
+if (-not $ProjectRoot) { $ProjectRoot = Split-Path -Parent $PSScriptRoot }
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
