@@ -7,6 +7,7 @@ import { FilterBar } from './components/filters/FilterBar.js'
 import { PaneLayout } from './components/layout/PaneLayout.js'
 import { ShortcutsDialog } from './components/help/ShortcutsDialog.js'
 import { CommandPaletteShell } from './components/help/CommandPaletteShell.js'
+import { ImportDialog } from './components/import/ImportDialog.js'
 import { useFilters } from './hooks/useFilters.js'
 import { useDeadlineMutations } from './hooks/useDeadlineMutations.js'
 import { useDocumentTitle } from './hooks/useDocumentTitle.js'
@@ -23,6 +24,7 @@ export function App() {
   const [selectedDeadlineIndex, setSelectedDeadlineIndex] = useState<number | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [commandKOpen, setCommandKOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [deleteTriggerSignal, setDeleteTriggerSignal] = useState<{ id: number; nonce: number } | null>(null)
 
   // POLISH-04: duplicate source — when set, DeadlineForm receives prefillValues
@@ -256,12 +258,21 @@ export function App() {
       <main className="mx-auto px-4 py-6 max-w-[7680px]">
         <div className="flex items-baseline justify-between mb-2">
           <h1 className="text-2xl font-semibold">Case Calendar</h1>
+          <div className="flex items-baseline gap-4">
+          <button
+            type="button"
+            onClick={() => setImportOpen(true)}
+            className="text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline transition-colors"
+          >
+            Import
+          </button>
           <Link
             to="/settings"
             className="text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline transition-colors"
           >
             Settings
           </Link>
+          </div>
         </div>
 
         <PaneLayout
@@ -272,6 +283,7 @@ export function App() {
 
         {/* Dialogs mount unconditionally — Radix portals content only when open */}
         <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
+        <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
         <CommandPaletteShell
           open={commandKOpen}
           onOpenChange={setCommandKOpen}

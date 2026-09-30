@@ -2,6 +2,7 @@ import type { Deadline, DeadlineCreate, DeadlineType, DeadlineUpdate } from '../
 import type { CaseColorOverride } from '../../shared/lib/case-colors.js'
 import type { AppSettings, SettingsUpdate } from '../../shared/schemas/settings.js'
 import type { CaseSummary } from '../../shared/schemas/cases.js'
+import type { DeadlineProposal } from '../../shared/schemas/imports.js'
 
 export type { Deadline, DeadlineCreate }
 
@@ -285,4 +286,32 @@ export async function setCaseArchived(caseLabel: string, archived: boolean): Pro
     const body = await res.json().catch(() => null)
     throw new Error(body?.error?.message ?? 'Could not update the case. Try again.')
   }
+}
+
+/** POST /api/deadlines/extract: propose deadlines found in a longer text (nothing is saved). */
+export async function extractDeadlines(text: string, caseLabel: string | null): Promise<{ proposals: DeadlineProposal[] }> {
+  const res = await fetch('/api/deadlines/extract', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, caseLabel }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message ?? 'Could not read the text. Try again.')
+  }
+  return res.json()
+}
+
+/** POST /api/deadlines/bulk: save reviewed deadlines, all or nothing. */
+export async function createDeadlinesBulk(deadlines: DeadlineCreate[]): Promise<{ created: number }> {
+  const res = await fetch('/api/deadlines/bulk', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deadlines }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message ?? 'Could not save the deadlines. Nothing was saved.')
+  }
+  return res.json()
 }

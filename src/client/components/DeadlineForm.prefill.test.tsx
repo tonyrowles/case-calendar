@@ -10,6 +10,8 @@ import type { Deadline } from '@/shared/schemas/deadline.js'
 // POLISH-04: DeadlineForm prefillValues prop tests
 
 vi.mock('@/client/lib/api.js', () => ({
+  extractDeadlines: vi.fn().mockResolvedValue({ proposals: [] }),
+  createDeadlinesBulk: vi.fn().mockResolvedValue({ created: 0 }),
   getCases: vi.fn().mockResolvedValue([]),
   renameCase: vi.fn().mockResolvedValue({ changed: 0 }),
   setCaseArchived: vi.fn().mockResolvedValue(undefined),

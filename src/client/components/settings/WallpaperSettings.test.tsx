@@ -7,6 +7,8 @@ import type { AppSettings } from '@/shared/schemas/settings.js'
 import { WallpaperSettings } from './WallpaperSettings.js'
 
 vi.mock('@/client/lib/api.js', () => ({
+  extractDeadlines: vi.fn().mockResolvedValue({ proposals: [] }),
+  createDeadlinesBulk: vi.fn().mockResolvedValue({ created: 0 }),
   getCases: vi.fn().mockResolvedValue([]),
   renameCase: vi.fn().mockResolvedValue({ changed: 0 }),
   setCaseArchived: vi.fn().mockResolvedValue(undefined),

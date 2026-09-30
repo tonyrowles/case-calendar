@@ -268,3 +268,15 @@ export function setCaseArchived(caseLabel: string, archived: boolean): void {
     db.delete(archivedCases).where(eq(archivedCases.caseKey, caseKey)).run()
   }
 }
+
+/**
+ * Insert several deadlines in one transaction (all or nothing), then notify the
+ * wallpaper worker once. Returns the number created.
+ */
+export function createDeadlines(inputs: Array<{ date: string; caseLabel: string; typeId: number; description?: string }>): number {
+  sqlite.transaction(() => {
+    for (const input of inputs) db.insert(deadlines).values(input).run()
+  })()
+  if (inputs.length > 0) notifyMutation()
+  return inputs.length
+}

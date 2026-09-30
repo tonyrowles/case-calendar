@@ -8,6 +8,8 @@ import type { CaseSummary } from '@/shared/schemas/cases.js'
 import { CaseList } from './CaseList.js'
 
 vi.mock('@/client/lib/api.js', () => ({
+  extractDeadlines: vi.fn().mockResolvedValue({ proposals: [] }),
+  createDeadlinesBulk: vi.fn().mockResolvedValue({ created: 0 }),
   getCases: vi.fn().mockResolvedValue([]),
   getCaseColors: vi.fn().mockResolvedValue([]),
   getDeadlines: vi.fn().mockResolvedValue([]),
