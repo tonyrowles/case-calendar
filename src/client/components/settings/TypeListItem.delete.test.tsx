@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // WR-03: TypeListItem — 2-step inline delete confirmation
 import React from 'react'
-import { describe, it, expect, vi, afterEach, act } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 

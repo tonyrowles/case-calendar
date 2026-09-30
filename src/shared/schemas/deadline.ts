@@ -13,6 +13,7 @@ export const deadlineCreateSchema = z.object({
 
 export const deadlineSchema = deadlineCreateSchema.extend({
   id: z.number().int(),
+  description: z.string().max(2000).nullable(), // DB column is nullable; API returns null, not undefined
   completedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+/// <reference types="node" />
 // Note: jsdom required for renderHook (Test 6 mounts the hook in a QueryClient wrapper).
 // Wave 0 stub had no jsdom directive; added per plan deviation rules (documented in SUMMARY).
 import { describe, it, expect, vi, afterEach } from 'vitest'

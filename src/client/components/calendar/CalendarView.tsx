@@ -204,7 +204,7 @@ function CalendarView({ onDateClick, deadlines: deadlinesProp, todayStr: todaySt
         }}
       />
       <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-        <PopoverAnchor virtualRef={virtualAnchorRef} />
+        <PopoverAnchor virtualRef={virtualAnchorRef as React.ComponentProps<typeof PopoverAnchor>['virtualRef']} />
         <PopoverContent aria-label="Event details">
           {selectedEvent && (
             <EventPopover

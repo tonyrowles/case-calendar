@@ -28,7 +28,7 @@ describe('TYPE-01: AddTypeRow — add new deadline type', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    fetchSpy = vi.spyOn(global, 'fetch')
+    fetchSpy = vi.spyOn(globalThis, 'fetch')
   })
 
   afterEach(() => {

@@ -95,7 +95,7 @@ describe('TypeFilter — Wave 0 stubs (FILT-02)', () => {
 
   it('TF4: type list is sourced from useTypeColors().types — no separate API call made', () => {
     // Spy on fetch to confirm TypeFilter does NOT trigger a fetch when deadline-types cache is seeded
-    const fetchSpy = vi.spyOn(global, 'fetch')
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
 
     renderTypeFilter('/')
 

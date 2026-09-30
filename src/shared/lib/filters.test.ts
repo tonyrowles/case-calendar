@@ -34,7 +34,7 @@ function makeDeadline(overrides: Partial<Fixture> & { date: string }): Fixture {
   }
 }
 
-const defaultFilters: Filters = { case: null, typeIds: [], range: 'all' }
+const defaultFilters: Filters = { case: null, typeIds: [], range: 'all', showCompleted: false }
 
 describe('applyFilters — FILT-01, FILT-02, FILT-03', () => {
   it('F1: case predicate — filters to deadlines whose caseLabel matches the filter case exactly', () => {
@@ -155,7 +155,7 @@ describe('applyFilters — FILT-01, FILT-02, FILT-03', () => {
       // Correct but completed
       makeDeadline({ id: 5, date: '2026-05-22', caseLabel: 'Smith v. Jones', typeId: 1, completedAt: '2026-05-21T10:00:00' }),
     ]
-    const filters: Filters = { case: 'Smith v. Jones', typeIds: [1], range: 'this-week' }
+    const filters: Filters = { case: 'Smith v. Jones', typeIds: [1], range: 'this-week', showCompleted: false }
     const result = applyFilters(deadlines, filters, TODAY)
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe(1)
