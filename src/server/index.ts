@@ -19,6 +19,7 @@ import { deadlinesRouter } from './routes/deadlines.js'
 import { deadlineTypesRouter } from './routes/deadline-types.js'
 import { caseLabelsRouter } from './routes/case-labels.js'
 import { caseColorsRouter } from './routes/case-colors.js'
+import { settingsRouter } from './routes/settings.js'
 import { logger } from './logger.js'
 import { userContextMiddleware, type AppVariables } from './middleware/user-context.js'
 import { createErrorHandler } from './middleware/error-shape.js'
@@ -48,6 +49,7 @@ app.route('/api', deadlinesRouter)
 app.route('/api', deadlineTypesRouter)
 app.route('/api', caseLabelsRouter)
 app.route('/api', caseColorsRouter)
+app.route('/api', settingsRouter)
 
 // OPS-02: Production SPA serving — mount AFTER /api routes so API precedence is intact.
 const isProduction = process.env.NODE_ENV === 'production'

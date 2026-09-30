@@ -7,6 +7,11 @@ import { DeadlineForm } from './components/DeadlineForm.js'
 
 // Mock the api module so DeadlineForm doesn't fire real fetch calls in tests
 vi.mock('./lib/api.js', () => ({
+  getSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
+  updateSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
+  uploadWallpaperBackground: vi.fn().mockResolvedValue({ version: 1 }),
+  deleteWallpaperBackground: vi.fn().mockResolvedValue(undefined),
+  wallpaperBackgroundUrl: (v: number) => `/api/wallpaper-background?v=${v}`,
   getCaseColors: vi.fn().mockResolvedValue([]),
   getDeadlineTypes: vi.fn().mockResolvedValue([]),
   getCaseLabels: vi.fn().mockResolvedValue([]),

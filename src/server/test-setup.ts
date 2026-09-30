@@ -41,6 +41,15 @@ sqlite.exec(`
   )
 `)
 
+// Create app_settings table (key/value app settings, e.g. wallpaperTheme)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS app_settings (
+    key       TEXT PRIMARY KEY NOT NULL,
+    value     TEXT NOT NULL,
+    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+  )
+`)
+
 // Install the updatedAt trigger (idempotent: CREATE TRIGGER IF NOT EXISTS)
 sqlite.exec(`
   CREATE TRIGGER IF NOT EXISTS set_deadlines_updated_at

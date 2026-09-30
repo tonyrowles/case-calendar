@@ -10,6 +10,11 @@ import type { Deadline } from '@/shared/schemas/deadline.js'
 // POLISH-04: DeadlineForm prefillValues prop tests
 
 vi.mock('@/client/lib/api.js', () => ({
+  getSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
+  updateSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
+  uploadWallpaperBackground: vi.fn().mockResolvedValue({ version: 1 }),
+  deleteWallpaperBackground: vi.fn().mockResolvedValue(undefined),
+  wallpaperBackgroundUrl: (v: number) => `/api/wallpaper-background?v=${v}`,
   getCaseColors: vi.fn().mockResolvedValue([]),
   getDeadlineTypes: vi.fn().mockResolvedValue([
     { id: 1, name: 'Filing', color: '#1D4ED8', createdAt: '2026-01-01T00:00:00Z' },

@@ -1,5 +1,6 @@
 import type { Deadline, DeadlineCreate, DeadlineType, DeadlineUpdate } from '../../shared/schemas/deadline.js'
 import type { CaseColorOverride } from '../../shared/lib/case-colors.js'
+import type { AppSettings, SettingsUpdate } from '../../shared/schemas/settings.js'
 
 export type { Deadline, DeadlineCreate }
 
@@ -200,4 +201,53 @@ export async function parseDeadline(text: string): Promise<ParsedDeadlineResult>
     throw new ApiError(message, code)
   }
   return res.json()
+}
+
+/** GET /api/settings: wallpaper theme + background image version. */
+export async function getSettings(): Promise<AppSettings> {
+  const res = await fetch('/api/settings')
+  if (!res.ok) throw new Error('Failed to fetch settings')
+  return res.json()
+}
+
+/** PUT /api/settings */
+export async function updateSettings(patch: SettingsUpdate): Promise<AppSettings> {
+  const res = await fetch('/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message ?? 'Could not save the setting. Try again.')
+  }
+  return res.json()
+}
+
+/** URL of the Glass theme background image; `version` busts caches after a new upload. */
+export function wallpaperBackgroundUrl(version: number): string {
+  return `/api/wallpaper-background?v=${version}`
+}
+
+/** PUT /api/wallpaper-background: upload the image file as the raw request body. */
+export async function uploadWallpaperBackground(file: Blob): Promise<{ version: number }> {
+  const res = await fetch('/api/wallpaper-background', {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message ?? 'Could not upload the image. Try again.')
+  }
+  return res.json()
+}
+
+/** DELETE /api/wallpaper-background (a 404 means there was no image: fine). */
+export async function deleteWallpaperBackground(): Promise<void> {
+  const res = await fetch('/api/wallpaper-background', { method: 'DELETE' })
+  if (!res.ok && res.status !== 404) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message ?? 'Could not remove the image. Try again.')
+  }
 }

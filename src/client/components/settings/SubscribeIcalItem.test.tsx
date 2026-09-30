@@ -8,6 +8,11 @@ import { SubscribeIcalItem } from './SubscribeIcalItem.js'
 
 // Hoist mock to top level (required by vitest module mocking rules)
 vi.mock('@/client/lib/api.js', () => ({
+  getSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
+  updateSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
+  uploadWallpaperBackground: vi.fn().mockResolvedValue({ version: 1 }),
+  deleteWallpaperBackground: vi.fn().mockResolvedValue(undefined),
+  wallpaperBackgroundUrl: (v: number) => `/api/wallpaper-background?v=${v}`,
   getCaseColors: vi.fn().mockResolvedValue([]),
   getCaseLabels: vi.fn().mockResolvedValue([]),
   getDeadlines: vi.fn().mockResolvedValue([]),

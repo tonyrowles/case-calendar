@@ -6,6 +6,7 @@ import { TypeListItem } from '@/client/components/settings/TypeListItem.js'
 import { AddTypeRow } from '@/client/components/settings/AddTypeRow.js'
 import { SubscribeIcalItem } from '@/client/components/settings/SubscribeIcalItem.js'
 import { CaseColorList } from '@/client/components/settings/CaseColorList.js'
+import { WallpaperSettings } from '@/client/components/settings/WallpaperSettings.js'
 
 export function SettingsPage() {
   const typesQuery = useQuery({
@@ -31,6 +32,14 @@ export function SettingsPage() {
           shows everywhere, including the desktop wallpaper.
         </p>
         <CaseColorList />
+      </section>
+
+      <section className="mt-8">
+        <h3 className="text-xl font-semibold mb-1">Wallpaper</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          How the desktop wallpaper looks. Changes show on the desktop within a few seconds.
+        </p>
+        <WallpaperSettings />
       </section>
 
       <section className="mt-8">

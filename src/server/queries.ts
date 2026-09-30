@@ -1,5 +1,5 @@
 import { db } from './db.js'
-import { caseColors, deadlines, deadlineTypes } from '../../drizzle/schema.js'
+import { appSettings, caseColors, deadlines, deadlineTypes } from '../../drizzle/schema.js'
 import { desc, eq, sql } from 'drizzle-orm'
 import type { DeadlineUpdate } from '../shared/schemas/deadline.js'
 import type { DeadlineTypeCreate, DeadlineTypeUpdate } from '../shared/schemas/deadlineType.js'
@@ -183,4 +183,24 @@ export function deleteCaseColor(caseLabel: string): boolean {
   const result = db.delete(caseColors).where(eq(caseColors.caseKey, caseColorKey(caseLabel))).run()
   if (result.changes > 0) notifyMutation()
   return result.changes > 0
+}
+
+// --- App settings (key/value) ---
+
+export function getSetting(key: string): string | null {
+  return db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, key)).get()?.value ?? null
+}
+
+/** Upsert a setting. Notifies the wallpaper worker (HOOK-04): settings can change the wallpaper. */
+export function setSetting(key: string, value: string): void {
+  db.insert(appSettings)
+    .values({ key, value })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: sql`(CURRENT_TIMESTAMP)` } })
+    .run()
+  notifyMutation()
+}
+
+/** Wake the wallpaper worker for a change that isn't a database write (e.g. a new background image). */
+export function notifyWallpaperInputsChanged(): void {
+  notifyMutation()
 }

@@ -30,12 +30,33 @@ export const CASE_PALETTE = [
 ] as const
 
 /** WCAG relative luminance of a #RRGGBB color (0 = black, 1 = white). */
-function relativeLuminance(hex: string): number {
+export function relativeLuminance(hex: string): number {
   const channel = (i: number) => {
     const c = parseInt(hex.slice(i, i + 2), 16) / 255
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
   }
   return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5)
+}
+
+/** WCAG contrast ratio between two #RRGGBB colors (1 to 21). */
+export function contrastRatio(aHex: string, bHex: string): number {
+  const [hi, lo] = [relativeLuminance(aHex), relativeLuminance(bHex)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+/**
+ * For dark wallpaper themes: blend a case color toward white just until it has at
+ * least `minContrast` against the dark background, so navy/maroon-type colors stay
+ * visible. Colors that already stand out are returned unchanged.
+ */
+export function liftForDarkBackground(hex: string, darkBgHex: string, minContrast = 3): string {
+  if (contrastRatio(hex, darkBgHex) >= minContrast) return hex
+  const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16))
+  for (let t = 0.05; t <= 1; t += 0.05) {
+    const mixed = '#' + rgb.map(c => Math.round(c + (255 - c) * t).toString(16).padStart(2, '0')).join('').toUpperCase()
+    if (contrastRatio(mixed, darkBgHex) >= minContrast) return mixed
+  }
+  return '#FFFFFF'
 }
 
 /** Black or white, whichever has more contrast on `bgHex` (for text on a case-color fill). */

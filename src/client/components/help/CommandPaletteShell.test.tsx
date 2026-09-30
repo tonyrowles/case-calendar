@@ -13,6 +13,11 @@ import { CommandPaletteShell } from './CommandPaletteShell.js'
 
 // Mock the api module so no real fetch calls are made
 vi.mock('@/client/lib/api.js', () => ({
+  getSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
+  updateSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
+  uploadWallpaperBackground: vi.fn().mockResolvedValue({ version: 1 }),
+  deleteWallpaperBackground: vi.fn().mockResolvedValue(undefined),
+  wallpaperBackgroundUrl: (v: number) => `/api/wallpaper-background?v=${v}`,
   getCaseColors: vi.fn().mockResolvedValue([]),
   parseDeadline: vi.fn(),
   ApiError: class ApiError extends Error {
