@@ -105,6 +105,7 @@ const DOCS: DocSpec[] = [
   {
     path: 'scripts/tray.ps1',
     anchors: [
+      'if (-not $ProjectRoot)',   // PS 5.1: $PSScriptRoot is empty in param() defaults
       'Local\\CaseCalendarTray',   // single-instance mutex
       'CreateNoWindow = $true',    // server runs with no console window
       '/T /F',                     // stop kills the whole cmd -> node tree
@@ -115,6 +116,7 @@ const DOCS: DocSpec[] = [
   {
     path: 'scripts/update.ps1',
     anchors: [
+      'if (-not $ProjectRoot)',   // PS 5.1: $PSScriptRoot is empty in param() defaults
       'git pull --ff-only',
       'status --porcelain --untracked-files=no',  // refuses to clobber local edits
       'git reset --hard $oldHead',                 // rollback on failure
