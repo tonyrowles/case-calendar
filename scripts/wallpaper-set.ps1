@@ -25,14 +25,41 @@ if (-not (Test-Path $Path)) {
 # IDesktopWallpaper requires an absolute path.
 $resolved = (Resolve-Path $Path).ProviderPath
 
-$type = [Type]::GetTypeFromCLSID([Guid]'{C2CF3110-460E-4fc1-B9D0-8A1C0C9CC4BD}')
-if (-not $type) {
-  Write-Error "IDesktopWallpaper COM not available on this system (requires Windows 8+)"
-  exit 1
+# IDesktopWallpaper is IUnknown-only (no IDispatch), so PowerShell late binding
+# ($obj.SetWallpaper(...)) fails with "does not contain a method named
+# 'SetWallpaper'". Declare the interface via C# COM interop instead. Methods must
+# be declared in vtable order; only the first two slots are needed here.
+# CLSID DesktopWallpaper: C2CF3110-460E-4fc1-B9D0-8A1C0C9CC4BD
+# IID IDesktopWallpaper:  B92B56A9-8B55-4E14-9A89-0199BBB6F93B
+if (-not ('CaseCalendar.DesktopWallpaper' -as [Type])) {
+  Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+namespace CaseCalendar {
+  [ComImport, Guid("B92B56A9-8B55-4E14-9A89-0199BBB6F93B"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  internal interface IDesktopWallpaper {
+    void SetWallpaper([MarshalAs(UnmanagedType.LPWStr)] string monitorID, [MarshalAs(UnmanagedType.LPWStr)] string wallpaper);
+    [return: MarshalAs(UnmanagedType.LPWStr)]
+    string GetWallpaper([MarshalAs(UnmanagedType.LPWStr)] string monitorID);
+  }
+
+  [ComImport, Guid("C2CF3110-460E-4fc1-B9D0-8A1C0C9CC4BD")]
+  internal class DesktopWallpaperClass { }
+
+  public static class DesktopWallpaper {
+    // null monitorID applies to all monitors (per Microsoft docs and CONTEXT.md decision)
+    public static void Set(string path) {
+      ((IDesktopWallpaper)new DesktopWallpaperClass()).SetWallpaper(null, path);
+    }
+    public static string Get() {
+      return ((IDesktopWallpaper)new DesktopWallpaperClass()).GetWallpaper(null);
+    }
+  }
+}
+'@
 }
 
-$wallpaper = [Activator]::CreateInstance($type)
-# $null monitorID applies to all monitors (per Microsoft docs and CONTEXT.md decision)
-$wallpaper.SetWallpaper($null, $resolved)
+[CaseCalendar.DesktopWallpaper]::Set($resolved)
 
 Write-Host "Wallpaper set: $resolved"
