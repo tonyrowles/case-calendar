@@ -12,6 +12,8 @@ export interface CaseLabelInputProps {
   labels: readonly string[]
   /** Optional case -> color, shown as a swatch next to each existing case */
   caseColorOf?: (caseLabel: string) => string
+  /** Existing cases to leave out of the suggestions (archived); they still count for matching */
+  isHidden?: (caseLabel: string) => boolean
   onChange: (value: string) => void
   onBlur?: () => void
   inputRef?: React.Ref<HTMLInputElement>
@@ -28,18 +30,19 @@ type Option = { kind: 'existing'; label: string } | { kind: 'new'; label: string
  * snaps to the existing label so the same case is never saved under two spellings.
  */
 export function CaseLabelInput({
-  id, value, labels, caseColorOf, onChange, onBlur, inputRef, placeholder, ...aria
+  id, value, labels, caseColorOf, isHidden, onChange, onBlur, inputRef, placeholder, ...aria
 }: CaseLabelInputProps): React.JSX.Element {
   const listId = useId()
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
 
   const options: Option[] = useMemo(() => {
-    const existing = suggestCases(value, labels).map(label => ({ kind: 'existing' as const, label }))
+    const visible = isHidden ? labels.filter(l => !isHidden(l)) : labels
+    const existing = suggestCases(value, visible).map(label => ({ kind: 'existing' as const, label }))
     const typed = value.trim()
     const isNew = typed !== '' && findExistingCase(typed, labels) === null
     return isNew ? [...existing, { kind: 'new' as const, label: typed }] : existing
-  }, [value, labels])
+  }, [value, labels, isHidden])
 
   const showList = open && options.length > 0
 

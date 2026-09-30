@@ -1,6 +1,7 @@
 import type { Deadline, DeadlineCreate, DeadlineType, DeadlineUpdate } from '../../shared/schemas/deadline.js'
 import type { CaseColorOverride } from '../../shared/lib/case-colors.js'
 import type { AppSettings, SettingsUpdate } from '../../shared/schemas/settings.js'
+import type { CaseSummary } from '../../shared/schemas/cases.js'
 
 export type { Deadline, DeadlineCreate }
 
@@ -249,5 +250,39 @@ export async function deleteWallpaperBackground(): Promise<void> {
   if (!res.ok && res.status !== 404) {
     const body = await res.json().catch(() => null)
     throw new Error(body?.error?.message ?? 'Could not remove the image. Try again.')
+  }
+}
+
+/** GET /api/cases: every case with open/total deadline counts and archive state. */
+export async function getCases(): Promise<CaseSummary[]> {
+  const res = await fetch('/api/cases')
+  if (!res.ok) throw new Error('Failed to fetch cases')
+  return res.json()
+}
+
+/** POST /api/cases/rename: rename a case, or merge it into another existing case. */
+export async function renameCase(from: string, to: string): Promise<{ changed: number }> {
+  const res = await fetch('/api/cases/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message ?? 'Could not rename the case. Try again.')
+  }
+  return res.json()
+}
+
+/** PUT /api/cases/archive */
+export async function setCaseArchived(caseLabel: string, archived: boolean): Promise<void> {
+  const res = await fetch('/api/cases/archive', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ caseLabel, archived }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message ?? 'Could not update the case. Try again.')
   }
 }

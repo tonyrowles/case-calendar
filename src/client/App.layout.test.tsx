@@ -11,6 +11,9 @@ import { toISODateString } from '@/shared/lib/date.js'
 import { App } from './App.js'
 
 vi.mock('./lib/api.js', () => ({
+  getCases: vi.fn().mockResolvedValue([]),
+  renameCase: vi.fn().mockResolvedValue({ changed: 0 }),
+  setCaseArchived: vi.fn().mockResolvedValue(undefined),
   getSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
   updateSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
   uploadWallpaperBackground: vi.fn().mockResolvedValue({ version: 1 }),

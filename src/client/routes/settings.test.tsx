@@ -10,6 +10,9 @@ import { SettingsPage } from './settings.js'
 // TYPE-01..04: Settings page — types list, AddTypeRow, no FilterBar
 
 vi.mock('@/client/lib/api.js', () => ({
+  getCases: vi.fn().mockResolvedValue([]),
+  renameCase: vi.fn().mockResolvedValue({ changed: 0 }),
+  setCaseArchived: vi.fn().mockResolvedValue(undefined),
   getSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
   updateSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
   uploadWallpaperBackground: vi.fn().mockResolvedValue({ version: 1 }),

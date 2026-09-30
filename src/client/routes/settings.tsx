@@ -5,7 +5,7 @@ import { getDeadlineTypes } from '@/client/lib/api.js'
 import { TypeListItem } from '@/client/components/settings/TypeListItem.js'
 import { AddTypeRow } from '@/client/components/settings/AddTypeRow.js'
 import { SubscribeIcalItem } from '@/client/components/settings/SubscribeIcalItem.js'
-import { CaseColorList } from '@/client/components/settings/CaseColorList.js'
+import { CaseList } from '@/client/components/settings/CaseList.js'
 import { WallpaperSettings } from '@/client/components/settings/WallpaperSettings.js'
 
 export function SettingsPage() {
@@ -28,10 +28,11 @@ export function SettingsPage() {
       <section>
         <h3 className="text-xl font-semibold mb-1">Cases</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Each case gets its own color automatically. Pick one to change it; the new color
-          shows everywhere, including the desktop wallpaper.
+          Each case gets its own color automatically; pick one to change it. Rename a case to fix
+          its name on every deadline (or merge it into another case). Archive closed cases to hide
+          them from the case picker and filter; their deadlines still show.
         </p>
-        <CaseColorList />
+        <CaseList />
       </section>
 
       <section className="mt-8">

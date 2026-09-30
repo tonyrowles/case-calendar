@@ -15,12 +15,15 @@ import {
 } from '@/client/components/ui/command.js'
 import { cn } from '@/client/lib/utils.js'
 import { useCaseColors } from '@/client/hooks/useCaseColors.js'
+import { useArchivedCases } from '@/client/hooks/useArchivedCases.js'
 import { CaseSwatch } from '@/client/components/CaseBadge.js'
 
 export function CaseCombobox(): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const { filters, setCase } = useFilters()
   const caseColorOf = useCaseColors()
+  // Archived cases drop out of the filter list (unless one is the active filter)
+  const isArchived = useArchivedCases()
 
   const labelsQuery = useQuery({
     queryKey: ['case-labels'],
@@ -58,7 +61,7 @@ export function CaseCombobox(): React.JSX.Element {
               {labelsQuery.isLoading ? 'Loading…' : 'No cases found.'}
             </CommandEmpty>
             <CommandGroup>
-              {labelsQuery.data?.map(label => (
+              {labelsQuery.data?.filter(label => !isArchived(label) || label === filters.case).map(label => (
                 <CommandItem
                   key={label}
                   value={label}
