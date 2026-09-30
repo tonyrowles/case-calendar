@@ -7,9 +7,17 @@ import { MemoryRouter } from 'react-router-dom'
 import { WallpaperView } from './wallpaper.js'
 import { caseColor, caseTextColor } from '@/shared/lib/case-colors.js'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
+import type { AppSettings } from '@/shared/schemas/settings.js'
+import { contrastRatio } from '@/shared/lib/case-colors.js'
+import { WALLPAPER_THEMES } from '@/shared/lib/wallpaper-themes.js'
 
 // Mock the api module so WallpaperView doesn't fire real fetch calls in tests
 vi.mock('@/client/lib/api.js', () => ({
+  getSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
+  updateSettings: vi.fn().mockResolvedValue({ wallpaperTheme: 'light', wallpaperBackground: null }),
+  uploadWallpaperBackground: vi.fn().mockResolvedValue({ version: 1 }),
+  deleteWallpaperBackground: vi.fn().mockResolvedValue(undefined),
+  wallpaperBackgroundUrl: (v: number) => `/api/wallpaper-background?v=${v}`,
   getCaseColors: vi.fn().mockResolvedValue([]),
   getDeadlines: vi.fn(),
   getDeadlineTypes: vi.fn(),
@@ -21,13 +29,15 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function renderWithQuery(ui: React.ReactElement, { deadlines = [] as Deadline[], types = [] as DeadlineType[], initialPath = '/' } = {}) {
+function renderWithQuery(ui: React.ReactElement, { deadlines = [] as Deadline[], types = [] as DeadlineType[], initialPath = '/', settings = { wallpaperTheme: 'light', wallpaperBackground: null } as AppSettings, caseColors = [] as Array<{ caseLabel: string; color: string }> } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   // Pre-populate the cache so useQuery reads from it without firing queryFn
   queryClient.setQueryData(['deadlines'], deadlines)
   queryClient.setQueryData(['deadline-types'], types)
+  queryClient.setQueryData(['settings'], settings)
+  queryClient.setQueryData(['case-colors'], caseColors)
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
@@ -81,7 +91,11 @@ describe('WallpaperView smoke (HOOK-01)', () => {
     expect(container.textContent).not.toContain('Case Calendar Deadlines')
     // Sun May 17 + 5 weeks - 1 day = Sat Jun 20
     expect(container.querySelector('[data-testid="wallpaper-range"]')!.textContent).toBe('May 17 – Jun 20, 2026')
-    expect(container.textContent).toContain('Friday, May 22')
+    // Today's date is in the header, in the list's column (above TODAY), not in the list itself
+    const dateEl = container.querySelector('[data-testid="wallpaper-today-date"]')!
+    expect(dateEl.textContent).toBe('Friday, May 22')
+    expect(dateEl.parentElement!.tagName).toBe('HEADER')
+    expect(container.querySelector('[data-testid="wallpaper-list"]')!.textContent).not.toContain('Friday')
   })
 
   it('renders "Last updated" timestamp text in the bottom-right footer', () => {
@@ -476,5 +490,56 @@ describe('WALL-06: timestamp + layout + empty state', () => {
     expect(container.textContent).not.toContain('Done Today')
     // Timestamp footer is still present
     expect(container.querySelector('[data-testid="wallpaper-timestamp"]')).not.toBeNull()
+  })
+})
+
+describe('Wallpaper themes', () => {
+  const d: Deadline = {
+    id: 1, date: '2026-05-26', caseLabel: 'Navy Case', typeId: 1, completedAt: null,
+    createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', description: 'Hearing',
+  }
+  const root = (c: HTMLElement) => c.querySelector('[data-testid="wallpaper-root"]') as HTMLElement
+
+  it('uses the saved theme', () => {
+    const { container } = renderWithQuery(<WallpaperView />, { settings: { wallpaperTheme: 'dark', wallpaperBackground: null } })
+    expect(root(container).dataset.theme).toBe('dark')
+    expect(root(container).style.getPropertyValue('--foreground')).toBe(WALLPAPER_THEMES.dark.vars['--foreground'])
+  })
+
+  it('?theme= overrides the saved theme (previews)', () => {
+    const { container } = renderWithQuery(<WallpaperView />, {
+      settings: { wallpaperTheme: 'dark', wallpaperBackground: null }, initialPath: '/?theme=glass',
+    })
+    expect(root(container).dataset.theme).toBe('glass')
+    expect(container.querySelector<HTMLElement>('[data-testid="wallpaper-surface"]')!.style.borderRadius).not.toBe('')
+  })
+
+  it('Glass uses the uploaded background image (cache-busted by version); other themes ignore it', () => {
+    const settings: AppSettings = { wallpaperTheme: 'glass', wallpaperBackground: { version: 123 } }
+    const glass = renderWithQuery(<WallpaperView />, { settings })
+    expect(root(glass.container).style.background).toContain('/api/wallpaper-background?v=123')
+    cleanup()
+    const light = renderWithQuery(<WallpaperView />, { settings: { ...settings, wallpaperTheme: 'light' } })
+    expect(root(light.container).style.background).not.toContain('wallpaper-background')
+  })
+
+  it('dark themes lighten dark case colors so they stay visible', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 22))
+    const toHex = (rgb: string) => '#' + rgb.match(/\d+/g)!.slice(0, 3).map(n => Number(n).toString(16).padStart(2, '0')).join('')
+    const badgeColor = (theme: 'light' | 'dark') => {
+      const { container } = renderWithQuery(<WallpaperView />, {
+        deadlines: [d], types: [mockType],
+        settings: { wallpaperTheme: theme, wallpaperBackground: null },
+        caseColors: [{ caseLabel: 'Navy Case', color: '#000075' }],
+      })
+      const bg = (container.querySelector('[data-testid="wallpaper-case-badge"]') as HTMLElement).style.backgroundColor
+      cleanup()
+      return toHex(bg)
+    }
+    expect(badgeColor('light')).toBe('#000075')
+    const lifted = badgeColor('dark')
+    expect(lifted).not.toBe('#000075')
+    expect(contrastRatio(lifted, WALLPAPER_THEMES.dark.darkBackground!)).toBeGreaterThanOrEqual(3)
   })
 })

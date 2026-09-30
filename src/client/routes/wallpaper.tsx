@@ -1,13 +1,14 @@
-import React, { useMemo } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { addDays, format, startOfWeek } from 'date-fns'
 import { useSearchParams } from 'react-router-dom'
 import { Calendar as CalendarIcon } from 'lucide-react'
 
-import { getDeadlines } from '@/client/lib/api.js'
+import { getDeadlines, getSettings, wallpaperBackgroundUrl } from '@/client/lib/api.js'
 import { parseLocalDate, toISODateString } from '@/shared/lib/date.js'
 import { groupByBucket } from '@/shared/lib/buckets.js'
-import { caseTextColor } from '@/shared/lib/case-colors.js'
+import { caseTextColor, liftForDarkBackground } from '@/shared/lib/case-colors.js'
+import { DEFAULT_WALLPAPER_THEME, WALLPAPER_THEMES, glassCanvasWithImage, isWallpaperThemeId, type WallpaperTheme } from '@/shared/lib/wallpaper-themes.js'
 import { useCaseColors } from '@/client/hooks/useCaseColors.js'
 import { useTypeColors } from '@/client/hooks/useTypeColors.js'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
@@ -29,10 +30,12 @@ const MAX_PER_CELL = 3   // calendar cell overflow → "+N more"
 const LIST_ROW_BUDGET = 14
 
 // Colors come from the case (useCaseColors, shared with the main app); types are
-// shown by name only.
+// shown by name only. `theme` supplies the today highlight, past-day dimming and the
+// case-color filter (see src/shared/lib/wallpaper-themes.ts).
 type ColorFns = {
   typesById: Map<number, DeadlineType>
   caseColorOf: (caseLabel: string) => string
+  theme: WallpaperTheme
 }
 
 /**
@@ -51,7 +54,7 @@ function formatIso(iso: string, pattern: string): string {
 
 // Title on top; case badge (case color fill, black/white text for contrast) · type
 // below. Without a title, the type name moves up to the title line.
-function TitleBlock({ deadline, typesById, caseColorOf, titleSize }: { deadline: Deadline; titleSize: number } & ColorFns) {
+function TitleBlock({ deadline, typesById, caseColorOf, theme, titleSize }: { deadline: Deadline; titleSize: number } & ColorFns) {
   const typeName = typesById.get(deadline.typeId)?.name ?? 'Unknown'
   const title = deadlineTitle(deadline)
   return (
@@ -63,7 +66,7 @@ function TitleBlock({ deadline, typesById, caseColorOf, titleSize }: { deadline:
         <span
           data-testid="wallpaper-case-badge"
           className="rounded-sm px-2"
-          style={{ backgroundColor: caseColorOf(deadline.caseLabel), color: caseTextColor(caseColorOf(deadline.caseLabel)), fontWeight: 600 }}
+          style={{ backgroundColor: caseColorOf(deadline.caseLabel), color: caseTextColor(caseColorOf(deadline.caseLabel)), fontWeight: 600, filter: theme.caseColorFilter }}
         >
           {deadline.caseLabel}
         </span>
@@ -115,7 +118,7 @@ function RollingCalendar({ deadlines, today, todayStr, ...colors }: {
         ))}
       </div>
       <div
-        className="grid grid-cols-7 flex-1 min-h-0 border-t border-l border-border"
+        className="grid grid-cols-7 flex-1 min-h-0 border-t-2 border-l-2 border-border"
         style={{ gridTemplateRows: `repeat(${WEEKS_SHOWN}, minmax(0, 1fr))` }}
       >
         {days.map((day, i) => {
@@ -131,10 +134,13 @@ function RollingCalendar({ deadlines, today, todayStr, ...colors }: {
             <div
               key={iso}
               data-testid={`wallpaper-day-${iso}`}
-              className={`flex flex-col gap-2 min-h-0 overflow-hidden border-r border-b border-border p-3 ${isToday ? 'bg-amber-50' : ''} ${isPast ? 'opacity-40' : ''}`}
-              style={isToday ? { boxShadow: 'inset 0 0 0 4px #B45309' } : undefined} // allow-hex: today ring (amber-700)
+              className={`flex flex-col gap-2 min-h-0 overflow-hidden border-r-2 border-b-2 border-border p-3 ${isPast ? 'opacity-40' : ''}`}
+              style={{
+                ...(isToday ? { backgroundColor: colors.theme.today.fill, boxShadow: `inset 0 0 0 4px ${colors.theme.today.ring}` } : {}),
+                ...(isPast ? { opacity: colors.theme.pastOpacity } : {}),
+              }}
             >
-              <div className={`text-3xl ${isToday ? 'font-bold text-amber-700' : 'text-foreground'}`}>{label}</div>
+              <div className={`text-3xl ${isToday ? 'font-bold' : 'text-foreground'}`} style={isToday ? { color: colors.theme.today.text } : undefined}>{label}</div>
               {shown.map(d => <CalendarChip key={d.id} deadline={d} {...colors} />)}
               {hidden > 0 && <div className="text-2xl text-muted-foreground pl-3">+{hidden} more</div>}
             </div>
@@ -159,10 +165,11 @@ function ListRow({ deadline, ...colors }: { deadline: Deadline } & ColorFns) {
   )
 }
 
-function BucketSection({ testid, title, titleClass = 'text-foreground', items, emptyText, limit, ...colors }: {
+function BucketSection({ testid, title, titleClass = 'text-foreground', titleColor, items, emptyText, limit, ...colors }: {
   testid: string
   title: string
   titleClass?: string
+  titleColor?: string
   items: Deadline[]
   emptyText: string
   limit?: number
@@ -171,8 +178,8 @@ function BucketSection({ testid, title, titleClass = 'text-foreground', items, e
   const hidden = items.length - shown.length
   return (
     <div data-testid={testid} className="mb-10">
-      <div className="pb-2 border-b border-border mb-4">
-        <div className={`text-4xl font-semibold ${titleClass}`}>{title}</div>
+      <div className="pb-2 border-b-2 border-border mb-4">
+        <div className={`text-4xl font-semibold ${titleColor ? '' : titleClass}`} style={titleColor ? { color: titleColor } : undefined}>{title}</div>
       </div>
       {items.length === 0
         ? <p className="text-3xl text-muted-foreground italic">{emptyText}</p>
@@ -191,6 +198,14 @@ export function WallpaperView(): React.JSX.Element {
   const { typesById, isLoading: typesLoading, isError: typesError } = useTypeColors()
 
   const [searchParams] = useSearchParams()
+  // Theme: ?theme= (previews) > saved setting (Settings > Wallpaper) > default. If settings
+  // can't be loaded, fall back to the default rather than failing the wallpaper.
+  const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: getSettings, retry: false })
+  const themeParam = searchParams.get('theme')
+  const themeId = isWallpaperThemeId(themeParam) ? themeParam : (settingsQuery.data?.wallpaperTheme ?? DEFAULT_WALLPAPER_THEME)
+  const theme = WALLPAPER_THEMES[themeId]
+  const background = settingsQuery.data?.wallpaperBackground ?? null
+  const canvas = theme.id === 'glass' && background ? glassCanvasWithImage(wallpaperBackgroundUrl(background.version)) : theme.canvas
 
   // Capture a single Date at component mount so todayStr is always consistent.
   // new Date() no-arg is allowed — SAFE-03 guard narrows to string-arg forms only.
@@ -212,8 +227,14 @@ export function WallpaperView(): React.JSX.Element {
   const active = useMemo(() => deadlines.filter(d => d.completedAt === null), [deadlines])
   const buckets = useMemo(() => groupByBucket(active, todayStr), [active, todayStr])
   // Same case colors as the main app (assigned across all open deadlines)
-  const caseColorOf = useCaseColors()
-  const colors: ColorFns = { typesById, caseColorOf }
+  const baseCaseColorOf = useCaseColors()
+  // Dark themes lighten case colors that would disappear into the background
+  const darkBackground = theme.darkBackground
+  const caseColorOf = useCallback(
+    (label: string) => darkBackground ? liftForDarkBackground(baseCaseColorOf(label), darkBackground) : baseCaseColorOf(label),
+    [baseCaseColorOf, darkBackground]
+  )
+  const colors: ColorFns = { typesById, caseColorOf, theme }
   const allEmpty =
     buckets.today.length + buckets.thisWeek.length + buckets.nextWeek.length + buckets.later.length === 0
 
@@ -229,7 +250,7 @@ export function WallpaperView(): React.JSX.Element {
   const rangeStart = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON })
   const rangeEnd = addDays(rangeStart, WEEKS_SHOWN * 7 - 1)
 
-  if (deadlinesQuery.isLoading || typesLoading) {
+  if (deadlinesQuery.isLoading || typesLoading || settingsQuery.isLoading) {
     return <div className="animate-pulse bg-muted rounded h-4 w-40" />
   }
   if (deadlinesQuery.isError || typesError) {
@@ -239,22 +260,42 @@ export function WallpaperView(): React.JSX.Element {
   return (
     <div
       data-testid="wallpaper-root"
+      data-theme={theme.id}
       style={{
         width: `${CANVAS_W}px`,
         height: `${CANVAS_H}px`,
         overflow: 'hidden',
-        background: '#FFFFFF', // allow-hex: wallpaper canvas background (not a type color)
+        background: canvas,
         fontFamily: 'var(--font-sans)',
         position: 'relative',
         paddingLeft: `${ICON_GUTTER}px`,
+        // Tailwind's text-foreground / text-muted-foreground / border-border read these
+        ...(theme.vars as React.CSSProperties),
       }}
       className="p-16 flex flex-col"
     >
-      <header className="flex items-baseline justify-between pb-4 border-b border-border mb-8">
+      <div
+        data-testid="wallpaper-surface"
+        className="flex-1 min-h-0 flex flex-col"
+        style={theme.panel ? {
+          background: theme.panel.background,
+          border: `1px solid ${theme.panel.border}`,
+          borderRadius: `${theme.panel.radiusPx}px`,
+          padding: `${theme.panel.paddingPx}px`,
+          backdropFilter: `blur(${theme.panel.blurPx}px)`,
+        } : undefined}
+      >
+      {/* Same two columns as the body, so today's date lines up above the TODAY list */}
+      <header
+        className="items-baseline pb-4 border-b-2 border-border mb-8"
+        style={{ display: 'grid', gridTemplateColumns: `minmax(0, 1fr) ${LIST_W}px`, gap: '96px' }}
+      >
         <div data-testid="wallpaper-range" className="text-5xl font-semibold text-foreground">
           {format(rangeStart, 'MMM d')} – {format(rangeEnd, 'MMM d, yyyy')}
         </div>
-        <div className="text-4xl text-muted-foreground">{format(today, 'EEEE, MMMM d')}</div>
+        <div data-testid="wallpaper-today-date" className="text-4xl text-muted-foreground">
+          {format(today, 'EEEE, MMMM d')}
+        </div>
       </header>
 
       <div className="flex-1 min-h-0 pb-8" style={{ display: 'grid', gridTemplateColumns: `minmax(0, 1fr) ${LIST_W}px`, gap: '96px' }}>
@@ -268,7 +309,7 @@ export function WallpaperView(): React.JSX.Element {
             </div>
           ) : (
             <>
-              <BucketSection testid="wallpaper-bucket-today" title="TODAY" titleClass="text-amber-700"
+              <BucketSection testid="wallpaper-bucket-today" title="TODAY" titleColor={theme.today.text}
                 items={buckets.today} emptyText="Nothing due today." limit={todayLimit} {...colors} />
               <BucketSection testid="wallpaper-bucket-thisWeek" title="THIS WEEK"
                 items={buckets.thisWeek} emptyText="Nothing else this week." limit={thisWeekLimit} {...colors} />
@@ -279,6 +320,7 @@ export function WallpaperView(): React.JSX.Element {
             </>
           )}
         </section>
+      </div>
       </div>
 
       {/* Bottom-right timestamp footer — always visible */}

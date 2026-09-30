@@ -32,6 +32,15 @@ export const caseColors = sqliteTable('case_colors', {
 })
 
 /**
+ * App settings as key/value rows (e.g. key 'wallpaperTheme'). Missing key = default.
+ */
+export const appSettings = sqliteTable('app_settings', {
+  key: text().primaryKey(),
+  value: text().notNull(),
+  updatedAt: text().notNull().default(sql`(CURRENT_TIMESTAMP)`),
+})
+
+/**
  * WR-05: SQLite trigger to auto-update updatedAt on every UPDATE.
  * DEFAULT (CURRENT_TIMESTAMP) only fires on INSERT; without this trigger any
  * Phase 2+ edit endpoint that omits SET updatedAt would return a stale value.

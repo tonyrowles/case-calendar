@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CASE_PALETTE, assignCaseColors, caseColor, caseTextColor } from './case-colors.js'
+import { CASE_PALETTE, assignCaseColors, caseColor, caseTextColor, contrastRatio, liftForDarkBackground } from './case-colors.js'
 
 describe('caseTextColor', () => {
   it('uses black on light fills and white on dark fills', () => {
@@ -93,5 +93,25 @@ describe('caseColor', () => {
     const labels = Array.from({ length: 200 }, (_, i) => `Case ${i} v. Defendant ${i * 7}`)
     const used = new Set(labels.map(caseColor))
     expect(used.size).toBe(CASE_PALETTE.length)
+  })
+})
+
+describe('liftForDarkBackground', () => {
+  const DARK = '#0B1220'
+  it('leaves colors that already stand out on a dark background unchanged', () => {
+    expect(liftForDarkBackground('#ffe119', DARK)).toBe('#ffe119')
+    expect(liftForDarkBackground('#42d4f4', DARK)).toBe('#42d4f4')
+  })
+
+  it('lightens dark palette colors (navy, maroon) to at least 3:1 against the background', () => {
+    for (const hex of ['#000075', '#800000']) {
+      const lifted = liftForDarkBackground(hex, DARK)
+      expect(lifted).not.toBe(hex)
+      expect(contrastRatio(lifted, DARK)).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('every palette color reaches 3:1 on the dark background after lifting', () => {
+    for (const hex of CASE_PALETTE) expect(contrastRatio(liftForDarkBackground(hex, DARK), DARK), hex).toBeGreaterThanOrEqual(3)
   })
 })
