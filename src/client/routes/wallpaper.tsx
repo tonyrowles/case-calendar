@@ -7,6 +7,7 @@ import { Calendar as CalendarIcon } from 'lucide-react'
 import { getDeadlines } from '@/client/lib/api.js'
 import { parseLocalDate, toISODateString } from '@/shared/lib/date.js'
 import { groupByBucket } from '@/shared/lib/buckets.js'
+import { assignCaseColors, caseColor, caseTextColor } from '@/shared/lib/case-colors.js'
 import { useTypeColors } from '@/client/hooks/useTypeColors.js'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
 
@@ -26,9 +27,11 @@ const MAX_PER_CELL = 3   // calendar cell overflow → "+N more"
 // Shared across sections in order, so overflow is always an explicit "+N more", never clipped.
 const LIST_ROW_BUDGET = 14
 
+// Colors come from the case (assigned per wallpaper so shown cases don't collide);
+// types are shown by name only.
 type ColorFns = {
   typesById: Map<number, DeadlineType>
-  getColor: (id: number) => string
+  caseColorOf: (caseLabel: string) => string
 }
 
 /**
@@ -45,9 +48,9 @@ function formatIso(iso: string, pattern: string): string {
   return d ? format(d, pattern) : iso
 }
 
-// Title on top; type (colored) · case below. Without a title, the type name moves up.
-function TitleBlock({ deadline, typesById, getColor, titleSize }: { deadline: Deadline; titleSize: number } & ColorFns) {
-  const color = getColor(deadline.typeId)
+// Title on top; case badge (case color fill, black/white text for contrast) · type
+// below. Without a title, the type name moves up to the title line.
+function TitleBlock({ deadline, typesById, caseColorOf, titleSize }: { deadline: Deadline; titleSize: number } & ColorFns) {
   const typeName = typesById.get(deadline.typeId)?.name ?? 'Unknown'
   const title = deadlineTitle(deadline)
   return (
@@ -56,8 +59,14 @@ function TitleBlock({ deadline, typesById, getColor, titleSize }: { deadline: De
         {title ?? typeName}
       </span>
       <span className="overflow-hidden text-ellipsis" style={{ fontSize: '26px', lineHeight: '34px' }}>
-        {title && <><span style={{ color, fontWeight: 600 }}>{typeName}</span><span className="text-muted-foreground"> · </span></>}
-        <span className="text-muted-foreground">{deadline.caseLabel}</span>
+        <span
+          data-testid="wallpaper-case-badge"
+          className="rounded-sm px-2"
+          style={{ backgroundColor: caseColorOf(deadline.caseLabel), color: caseTextColor(caseColorOf(deadline.caseLabel)), fontWeight: 600 }}
+        >
+          {deadline.caseLabel}
+        </span>
+        {title && <><span className="text-muted-foreground"> · </span><span className="text-muted-foreground">{typeName}</span></>}
       </span>
     </>
   )
@@ -68,7 +77,7 @@ function CalendarChip({ deadline, ...colors }: { deadline: Deadline } & ColorFns
     <div
       data-testid="wallpaper-chip"
       className="flex flex-col rounded-sm border-l-8 pl-3 pr-2 py-1 overflow-hidden whitespace-nowrap"
-      style={{ borderColor: colors.getColor(deadline.typeId) }}
+      style={{ borderColor: colors.caseColorOf(deadline.caseLabel) }}
     >
       <TitleBlock deadline={deadline} titleSize={34} {...colors} />
     </div>
@@ -138,7 +147,7 @@ function RollingCalendar({ deadlines, today, todayStr, ...colors }: {
 // List row: date column, then title over type · case
 function ListRow({ deadline, ...colors }: { deadline: Deadline } & ColorFns) {
   return (
-    <div className="flex items-start gap-6 border-l-8 rounded-sm pl-4 py-1 mb-3" style={{ borderColor: colors.getColor(deadline.typeId) }}>
+    <div className="flex items-start gap-6 border-l-8 rounded-sm pl-4 py-1 mb-3" style={{ borderColor: colors.caseColorOf(deadline.caseLabel) }}>
       <span className="shrink-0 text-3xl tabular-nums text-muted-foreground" style={{ width: '220px', lineHeight: '40px' }}>
         {formatIso(deadline.date, 'EEE, MMM d')}
       </span>
@@ -178,8 +187,7 @@ export function WallpaperView(): React.JSX.Element {
     queryFn: getDeadlines,
   })
 
-  const { getColor, typesById, isLoading: typesLoading, isError: typesError } = useTypeColors()
-  const colors: ColorFns = { getColor, typesById }
+  const { typesById, isLoading: typesLoading, isError: typesError } = useTypeColors()
 
   const [searchParams] = useSearchParams()
 
@@ -202,6 +210,11 @@ export function WallpaperView(): React.JSX.Element {
   // deadlines only appear (dimmed) on the calendar, never in the list.
   const active = useMemo(() => deadlines.filter(d => d.completedAt === null), [deadlines])
   const buckets = useMemo(() => groupByBucket(active, todayStr), [active, todayStr])
+  const caseColors = useMemo(() => assignCaseColors(active.map(d => d.caseLabel)), [active])
+  const colors: ColorFns = {
+    typesById,
+    caseColorOf: (label: string) => caseColors.get(label) ?? caseColor(label),
+  }
   const allEmpty =
     buckets.today.length + buckets.thisWeek.length + buckets.nextWeek.length + buckets.later.length === 0
 
