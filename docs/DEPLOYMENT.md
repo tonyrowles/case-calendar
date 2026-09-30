@@ -211,40 +211,39 @@ Verify: `Get-WmiObject Win32_Service -Filter "Name='CaseCalendar'" | Select-Obje
 
 ### Task Scheduler Alternative (no stored password)
 
-**When to use:** PIN/Microsoft Account sign-in (no local password for NSSM), OR you do not want a service holding a credential. Also the easiest way to enable Phase 9 wallpaper -- server inherits Session 1 from your interactive logon. Task Scheduler runs `npm run start` under your user at logon (Session 1); sign out stops it, sign back in auto-restarts. No service, no stored password, no Session 0 problem. **Trade-off:** only runs while signed in (NSSM starts at boot before login); for a single-user lawyer's machine, usually fine.
+**When to use:** PIN/Microsoft Account sign-in (no local password for NSSM), OR you do not want a service holding a credential. Also the easiest way to enable Phase 9 wallpaper -- the server runs in your interactive session (Session 1), so there is no Session 0 problem. **Trade-off:** only runs while signed in (NSSM starts at boot before login); for a single-user lawyer's machine, usually fine.
 
-**Install (ordinary PowerShell, no Administrator required):**
+A scheduled task starts the **tray app** (`scripts\tray.ps1`) hidden at logon. The tray runs the server with no console window and adds a calendar icon to the notification area:
+
+| Tray menu item | What it does |
+|----------------|--------------|
+| Open Case Calendar (or double-click the icon) | Opens `http://127.0.0.1:3747` |
+| Refresh wallpaper now | Runs `npm run wallpaper:once` |
+| Restart server | Stops the whole server process tree, then starts it again |
+| Check for updates / Install update | `git fetch`; installs via `scripts\update.ps1` (see below) |
+| Open logs folder | `logs\` -- `case-calendar.log` (server), `tray.log`, `update.log` |
+| Quit (stops the server) | Stops the server and removes the icon until next logon |
+
+The tray restarts the server if it crashes (and notifies you); after 3 crashes in 10 minutes it stops retrying and shows an error. It checks for updates at startup and every 6 hours and notifies you when one is available. The server log rotates at 10 MB.
+
+**Install (ordinary PowerShell, no Administrator required; run after `npm run build`):**
 
 ```powershell
-$ProjectRoot = "C:\apps\case-calendar"
-$Action = New-ScheduledTaskAction `
-  -Execute "cmd.exe" `
-  -Argument "/c npm run start >> logs\case-calendar.log 2>&1" `
-  -WorkingDirectory $ProjectRoot
-$Trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
-$Principal = New-ScheduledTaskPrincipal `
-  -UserId "$env:USERDOMAIN\$env:USERNAME" `
-  -LogonType Interactive `
-  -RunLevel Limited
-$Settings = New-ScheduledTaskSettingsSet `
-  -AllowStartIfOnBatteries `
-  -DontStopIfGoingOnBatteries `
-  -StartWhenAvailable
-Register-ScheduledTask `
-  -TaskName "CaseCalendar" `
-  -Action $Action `
-  -Trigger $Trigger `
-  -Principal $Principal `
-  -Settings $Settings
+cd C:\apps\case-calendar
+powershell -ExecutionPolicy Bypass -File .\scripts\install-tray.ps1
 ```
 
-**Test:** `Start-ScheduledTask -TaskName "CaseCalendar"`; wait ~3s; `netstat -ano | findstr 3747` (expect `127.0.0.1:3747 LISTENING`); open `http://127.0.0.1:3747`. **Verify auto-restart:** sign out, sign back in, wait ~10s, re-run `netstat`.
+This replaces any existing `CaseCalendar` task (including the older `cmd /c npm run start` one), stops a server already on port 3747, registers the task with no run-time limit (the Task Scheduler default of 72 hours would stop the server after 3 days), and starts the tray. On Windows 11 the icon may be under the `^` overflow arrow; drag it onto the taskbar to keep it visible. **Verify auto-start:** sign out, sign back in, wait ~10s, open `http://127.0.0.1:3747`.
 
-**Stop/remove:** `Stop-ScheduledTask -TaskName "CaseCalendar"; Unregister-ScheduledTask -TaskName "CaseCalendar" -Confirm:$false`.
+**Remove:** `powershell -ExecutionPolicy Bypass -File .\scripts\install-tray.ps1 -Uninstall` (data in `data\` is untouched).
 
-**Bonus -- Phase 9 wallpaper for free:** with `WALLPAPER_ENABLED=true`, the wallpaper worker runs in the Task Scheduler process (Session 1), so `IDesktopWallpaper::SetWallpaper` reaches the real desktop -- no NSSM `-LogonUser` needed.
+**Updating:** use the tray's **Install update**. It stops the server, then `scripts\update.ps1` runs `git pull --ff-only`, `npm install` (only if `package.json`/`package-lock.json` changed), backs up `data\deadlines.db` and runs `npm run db:push` (only if `drizzle/` changed), and `npm run build`; then the tray restarts the server, which re-renders the wallpaper on startup. If any step fails, `update.ps1` resets to the previous commit and rebuilds it; `logs\update.log` has the details. It refuses to run if tracked files have local edits.
 
-**If NSSM was previously installed:** `nssm stop CaseCalendar; nssm remove CaseCalendar confirm` first to avoid two copies fighting over port 3747.
+**Do not rebuild while the server is running.** `npm run build` replaces the hashed asset files, but a running server keeps serving the old `index.html` that points at them, so pages (and the wallpaper) render blank until the server restarts. Also note that `Stop-ScheduledTask` only ends the task's top-level process and can leave `node` running on port 3747; use the tray's **Restart server** (or re-run `install-tray.ps1`) instead.
+
+**Bonus -- Phase 9 wallpaper for free:** with `WALLPAPER_ENABLED=true`, the wallpaper worker runs in your session, so `IDesktopWallpaper::SetWallpaper` reaches the real desktop -- no NSSM `-LogonUser` needed.
+
+**If NSSM was previously installed:** `nssm stop CaseCalendar; nssm remove CaseCalendar confirm` first (Administrator) to avoid two copies fighting over port 3747. `install-tray.ps1` refuses to run while that service exists.
 
 ---
 
@@ -262,7 +261,7 @@ if (process.env.WALLPAPER_ENABLED === 'true') {
 
 `.env.example` ships `WALLPAPER_ENABLED=false` -- no Playwright, no PNGs, no PowerShell, no Session 0 problem.
 
-**To enable:** (1) set `WALLPAPER_ENABLED=true` in `.env.local`; (2) re-run `.\scripts\setup.ps1` (Step 6 downloads Chromium, ~120 MB) or `npx playwright install chromium`; (3) choose a Session 1+ deployment -- **(a)** reinstall NSSM with `-LogonUser '.\<your-username>'` (needs a real local Windows password -- see [NSSM Session 0 Fix](#nssm-session-0-fix-only-when-wallpaper_enabledtrue)), OR **(b)** switch to the [Task Scheduler Alternative](#task-scheduler-alternative-no-stored-password); (4) restart -- NSSM: `nssm restart CaseCalendar`; Task Scheduler: stop+start the task; (5) tail the log (should NOT show `wallpaper disabled`); confirm pipeline with `npm run wallpaper:once`.
+**To enable:** (1) set `WALLPAPER_ENABLED=true` in `.env.local`; (2) re-run `.\scripts\setup.ps1` (Step 6 downloads Chromium, ~120 MB) or `npx playwright install chromium`; (3) choose a Session 1+ deployment -- **(a)** reinstall NSSM with `-LogonUser '.\<your-username>'` (needs a real local Windows password -- see [NSSM Session 0 Fix](#nssm-session-0-fix-only-when-wallpaper_enabledtrue)), OR **(b)** switch to the [Task Scheduler Alternative](#task-scheduler-alternative-no-stored-password); (4) restart -- NSSM: `nssm restart CaseCalendar`; Task Scheduler: tray menu > Restart server; (5) tail the log (should NOT show `wallpaper disabled`); confirm pipeline with `npm run wallpaper:once`.
 
 **To disable later:** set `WALLPAPER_ENABLED=false`, restart. PNGs in `data/` stay (gitignored). `npx playwright uninstall chromium` reclaims ~120 MB.
 
