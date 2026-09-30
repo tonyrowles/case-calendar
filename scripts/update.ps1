@@ -57,7 +57,14 @@ function Get-GitOutput([string]$gitArgs) {
 Write-Log "==== update started in $ProjectRoot ===="
 
 # 1. Refuse to touch a working tree with local edits to tracked files.
+#    Exception: package-lock.json alone. It is generated, and a different npm version
+#    rewrites it on any 'npm install' (e.g. setup.ps1) -- the committed copy is authoritative.
 $dirty = Get-GitOutput 'status --porcelain --untracked-files=no'
+if ($dirty -and (Get-GitOutput 'diff --name-only HEAD') -eq 'package-lock.json') {
+  Write-Log 'Restoring package-lock.json (local npm rewrite; the committed lockfile wins)'
+  [void](Get-GitOutput 'checkout HEAD -- package-lock.json')
+  $dirty = Get-GitOutput 'status --porcelain --untracked-files=no'
+}
 if ($dirty) {
   Write-Log "Refusing to update: local changes to tracked files:`r`n$dirty"
   exit 5
@@ -82,7 +89,9 @@ $schemaChanged = [bool]($changed | Where-Object { $_ -like 'drizzle/*' })
 
 function Invoke-Build([bool]$installDeps) {
   if ($installDeps) {
-    if ((Invoke-Step 'npm install' 'npm install --no-audit --no-fund') -ne 0) { return $false }
+    # npm ci installs exactly the lockfile and never rewrites it (npm install would,
+    # leaving the tree dirty so the next update refuses to run).
+    if ((Invoke-Step 'npm ci' 'npm ci --no-audit --no-fund') -ne 0) { return $false }
   }
   if ((Invoke-Step 'npm run build' 'npm run build') -ne 0) { return $false }
   return $true
