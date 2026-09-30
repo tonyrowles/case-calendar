@@ -5,6 +5,7 @@ import { render, cleanup } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { WallpaperView } from './wallpaper.js'
+import { caseColor, caseTextColor } from '@/shared/lib/case-colors.js'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
 
 // Mock the api module so WallpaperView doesn't fire real fetch calls in tests
@@ -386,7 +387,7 @@ describe('WALL-06: timestamp + layout + empty state', () => {
     expect(container.querySelector('[data-testid="wallpaper-bucket-nextWeek"]')!.textContent).toContain('Mon, May 25')
   })
 
-  it('shows the first line of the description as the event title, with type · case beneath', () => {
+  it('shows the first line of the description as the event title, with case · type beneath', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 4, 22))
     const d: Deadline = {
@@ -397,9 +398,34 @@ describe('WALL-06: timestamp + layout + empty state', () => {
     const { container } = renderWithQuery(<WallpaperView />, { deadlines: [d], types: [mockType] })
     const chip = container.querySelector('[data-testid="wallpaper-day-2026-05-26"] [data-testid="wallpaper-chip"]')!
     expect(chip.children[0].textContent).toBe('Smith Deposition')
-    expect(chip.children[1].textContent).toBe('Filing · Smith v. Jones')
+    expect(chip.children[1].textContent).toBe('Smith v. Jones · Filing')
     expect(container.textContent).not.toContain('court reporter')
     expect(container.querySelector('[data-testid="wallpaper-bucket-nextWeek"]')!.textContent).toContain('Smith Deposition')
+  })
+
+  it('colors by case: same case -> same color regardless of type; the case name carries the color', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 4, 22))
+    const otherType: DeadlineType = { id: 2, name: 'Hearing', color: '#B91C1C', createdAt: '2026-01-01T00:00:00Z' }
+    const mk = (id: number, date: string, caseLabel: string, typeId: number): Deadline => ({
+      id, date, caseLabel, typeId, completedAt: null,
+      createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', description: `Event ${id}`,
+    })
+    const { container } = renderWithQuery(<WallpaperView />, {
+      deadlines: [mk(1, '2026-05-26', 'Smith v. Jones', 1), mk(2, '2026-05-27', 'Smith v. Jones', 2)],
+      types: [mockType, otherType],
+    })
+    const chips = container.querySelectorAll<HTMLElement>('[data-testid="wallpaper-calendar"] [data-testid="wallpaper-chip"]')
+    expect(chips.length).toBe(2)
+    const expected = caseColor('Smith v. Jones')
+    const toRgb = (hex: string) => `rgb(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)})`
+    for (const chip of chips) {
+      expect(chip.style.borderColor).toBe(toRgb(expected))
+      const badge = chip.querySelector('[data-testid="wallpaper-case-badge"]') as HTMLElement
+      expect(badge.textContent).toBe('Smith v. Jones')
+      expect(badge.style.backgroundColor).toBe(toRgb(expected))
+      expect(badge.style.color).toBe(toRgb(caseTextColor(expected)))
+    }
   })
 
   it('falls back to the type name as the title when there is no description', () => {
