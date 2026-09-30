@@ -19,8 +19,10 @@ const TEST_WORKER_ID = process.env.VITEST_POOL_ID || 'main'
 const DB_PATH = IS_TEST
   ? path.join(process.cwd(), 'data', `deadlines-test-${TEST_WORKER_ID}.db`)
   : path.join(process.cwd(), 'data', 'deadlines.db')
+// Per-worker test backup dir too: the startup backup writes deadlines-<date>.db, and
+// parallel workers VACUUM-ing INTO one shared file raced ("database is locked").
 export const BACKUP_DIR = IS_TEST
-  ? path.join(process.cwd(), 'data', 'backups-test')
+  ? path.join(process.cwd(), 'data', 'backups-test', TEST_WORKER_ID)
   : path.join(process.cwd(), 'data', 'backups')
 
 // Ensure directories exist
