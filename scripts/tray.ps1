@@ -5,8 +5,8 @@
 # Quit. Restarts the server if it crashes and checks git for updates.
 #
 # Started at logon by the "CaseCalendar" scheduled task that scripts/install-tray.ps1
-# registers. Manual start (hidden):
-#   powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File .\scripts\tray.ps1
+# registers. Manual start (no window; install-tray.ps1 explains why conhost --headless):
+#   conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File .\scripts\tray.ps1
 #
 # ASCII only: Windows PowerShell 5.1 misreads non-ASCII in BOM-less scripts.
 
