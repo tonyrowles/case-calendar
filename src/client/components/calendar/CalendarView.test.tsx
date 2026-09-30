@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+/// <reference types="node" />
 // Wave 0 stub. Plan 03 Task 1 (mapping + popover + CSS) converts the M-series
 // todos to live `it()`. Plan 03 Task 2 (FullCalendar integration) converts the C-series todos
 // to live `it()`.

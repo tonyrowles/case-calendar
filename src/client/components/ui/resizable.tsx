@@ -9,7 +9,7 @@ const ResizablePanelGroup = ({
   autoSaveId,
   direction,   // WR-04: extract so it does not bleed to DOM as unknown attribute
   ...props
-}: React.HTMLAttributes<HTMLDivElement> & {
+}: Omit<React.ComponentProps<typeof ResizablePrimitive.Group>, "id" | "orientation"> & {
   direction?: "horizontal" | "vertical"
   autoSaveId?: string
 }) => {
@@ -26,7 +26,7 @@ const ResizablePanelGroup = ({
       )}
       id={autoSaveId}
       orientation={direction ?? "horizontal"}
-      {...(props as React.ComponentProps<typeof ResizablePrimitive.Group>)}
+      {...props}
     />
   )
 }
