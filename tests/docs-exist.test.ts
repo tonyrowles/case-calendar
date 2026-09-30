@@ -127,7 +127,8 @@ const DOCS: DocSpec[] = [
     path: 'scripts/install-tray.ps1',
     anchors: [
       'ExecutionTimeLimit ([TimeSpan]::Zero)',     // default 72h limit would kill the server
-      '-WindowStyle Hidden',
+      "-Execute 'conhost.exe'",        // conhost --headless: no window (Windows Terminal can't hide one)
+      '--headless powershell.exe',
       'tray.ps1',
       '-Uninstall',
     ],

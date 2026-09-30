@@ -59,8 +59,12 @@ if (Get-Service -Name $TaskName -ErrorAction SilentlyContinue) {
 Stop-Existing
 
 $user = "$env:USERDOMAIN\$env:USERNAME"
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' `
-  -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File `"$TrayScript`"" `
+# conhost --headless runs PowerShell with no console window at all. Plain
+# 'powershell -WindowStyle Hidden' is not enough on Windows 11: when Windows Terminal
+# is the default terminal it opens a visible (empty) Terminal window that cannot be
+# hidden -- and closing it kills the tray (the server keeps running, orphaned).
+$action = New-ScheduledTaskAction -Execute 'conhost.exe' `
+  -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File `"$TrayScript`"" `
   -WorkingDirectory $ProjectRoot
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
