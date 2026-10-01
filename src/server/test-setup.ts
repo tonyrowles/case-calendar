@@ -41,6 +41,15 @@ sqlite.exec(`
   )
 `)
 
+// Create archived_cases table (closed cases hidden from pickers)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS archived_cases (
+    caseKey    TEXT PRIMARY KEY NOT NULL,
+    caseLabel  TEXT NOT NULL,
+    archivedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+  )
+`)
+
 // Create app_settings table (key/value app settings, e.g. wallpaperTheme)
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS app_settings (

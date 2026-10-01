@@ -32,6 +32,16 @@ export const caseColors = sqliteTable('case_colors', {
 })
 
 /**
+ * Archived (closed) cases: hidden from the case picker and case filter. Their deadlines
+ * still show everywhere. Keyed like case_colors (normalized label).
+ */
+export const archivedCases = sqliteTable('archived_cases', {
+  caseKey: text().primaryKey(),
+  caseLabel: text().notNull(),
+  archivedAt: text().notNull().default(sql`(CURRENT_TIMESTAMP)`),
+})
+
+/**
  * App settings as key/value rows (e.g. key 'wallpaperTheme'). Missing key = default.
  */
 export const appSettings = sqliteTable('app_settings', {

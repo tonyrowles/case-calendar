@@ -1,9 +1,10 @@
-import { db } from './db.js'
-import { appSettings, caseColors, deadlines, deadlineTypes } from '../../drizzle/schema.js'
+import { db, sqlite } from './db.js'
+import { appSettings, archivedCases, caseColors, deadlines, deadlineTypes } from '../../drizzle/schema.js'
 import { desc, eq, sql } from 'drizzle-orm'
 import type { DeadlineUpdate } from '../shared/schemas/deadline.js'
 import type { DeadlineTypeCreate, DeadlineTypeUpdate } from '../shared/schemas/deadlineType.js'
 import { caseColorKey, type CaseColorOverride } from '../shared/lib/case-colors.js'
+import type { CaseSummary } from '../shared/schemas/cases.js'
 
 // HOOK-04: Phase 9 wallpaper worker subscribes here
 let onMutationCallback: (() => void) | null = null
@@ -203,4 +204,67 @@ export function setSetting(key: string, value: string): void {
 /** Wake the wallpaper worker for a change that isn't a database write (e.g. a new background image). */
 export function notifyWallpaperInputsChanged(): void {
   notifyMutation()
+}
+
+// --- Case management (Settings > Cases): summaries, rename/merge, archive ---
+
+export function listCases(): CaseSummary[] {
+  const rows = db
+    .select({
+      caseLabel: deadlines.caseLabel,
+      totalCount: sql<number>`count(*)`,
+      openCount: sql<number>`sum(case when ${deadlines.completedAt} is null then 1 else 0 end)`,
+    })
+    .from(deadlines)
+    .groupBy(deadlines.caseLabel)
+    .orderBy(deadlines.caseLabel)
+    .all()
+  const archived = new Set(db.select({ caseKey: archivedCases.caseKey }).from(archivedCases).all().map(r => r.caseKey))
+  return rows
+    .filter(r => r.caseLabel.length > 0)
+    .map(r => ({
+      caseLabel: r.caseLabel,
+      openCount: Number(r.openCount),
+      totalCount: Number(r.totalCount),
+      archived: archived.has(caseColorKey(r.caseLabel)),
+    }))
+}
+
+/**
+ * Rename a case on every deadline that uses exactly `from`. If `to` is another existing
+ * case, this merges the two. A chosen color follows the case unless `to` already has one;
+ * archive state stays with the destination. Returns the number of deadlines changed.
+ */
+export function renameCase(from: string, to: string): number {
+  const fromKey = caseColorKey(from)
+  const toKey = caseColorKey(to)
+  const changed = sqlite.transaction(() => {
+    const result = db.update(deadlines).set({ caseLabel: to }).where(eq(deadlines.caseLabel, from)).run()
+    if (result.changes === 0) return 0
+    if (fromKey !== toKey) {
+      const fromColor = db.select().from(caseColors).where(eq(caseColors.caseKey, fromKey)).get()
+      const toColor = db.select().from(caseColors).where(eq(caseColors.caseKey, toKey)).get()
+      if (fromColor && !toColor) {
+        db.insert(caseColors).values({ caseKey: toKey, caseLabel: to, color: fromColor.color }).run()
+      }
+      db.delete(caseColors).where(eq(caseColors.caseKey, fromKey)).run()
+      db.delete(archivedCases).where(eq(archivedCases.caseKey, fromKey)).run()
+    } else {
+      // Respelling only (same key): keep the stored labels in step
+      db.update(caseColors).set({ caseLabel: to }).where(eq(caseColors.caseKey, fromKey)).run()
+      db.update(archivedCases).set({ caseLabel: to }).where(eq(archivedCases.caseKey, fromKey)).run()
+    }
+    return result.changes
+  })()
+  if (changed > 0) notifyMutation()
+  return changed
+}
+
+export function setCaseArchived(caseLabel: string, archived: boolean): void {
+  const caseKey = caseColorKey(caseLabel)
+  if (archived) {
+    db.insert(archivedCases).values({ caseKey, caseLabel }).onConflictDoNothing().run()
+  } else {
+    db.delete(archivedCases).where(eq(archivedCases.caseKey, caseKey)).run()
+  }
 }
