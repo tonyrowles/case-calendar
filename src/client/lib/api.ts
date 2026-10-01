@@ -3,6 +3,7 @@ import type { CaseColorOverride } from '../../shared/lib/case-colors.js'
 import type { AppSettings, SettingsUpdate } from '../../shared/schemas/settings.js'
 import type { CaseSummary } from '../../shared/schemas/cases.js'
 import type { DeadlineProposal } from '../../shared/schemas/imports.js'
+import type { EmailInbox } from '../../shared/schemas/email-imports.js'
 
 export type { Deadline, DeadlineCreate }
 
@@ -314,4 +315,38 @@ export async function createDeadlinesBulk(deadlines: DeadlineCreate[]): Promise<
     throw new Error(body?.error?.message ?? 'Could not save the deadlines. Nothing was saved.')
   }
   return res.json()
+}
+
+/** GET /api/email-imports: emailed orders waiting for review. */
+export async function getEmailInbox(): Promise<EmailInbox> {
+  const res = await fetch('/api/email-imports')
+  if (!res.ok) throw new Error('Failed to fetch the inbox')
+  return res.json()
+}
+
+/** POST /api/email-imports/check: check the mailbox now. */
+export async function checkEmailInbox(): Promise<EmailInbox> {
+  const res = await fetch('/api/email-imports/check', { method: 'POST' })
+  if (!res.ok) throw new Error('Could not check the mailbox. Try again.')
+  return res.json()
+}
+
+/** POST /api/email-imports/:id/accept: save reviewed deadlines and mark the email done. */
+export async function acceptEmailImport(id: number, deadlines: DeadlineCreate[]): Promise<{ created: number }> {
+  const res = await fetch(`/api/email-imports/${id}/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deadlines }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message ?? 'Could not save the deadlines. Nothing was saved.')
+  }
+  return res.json()
+}
+
+/** POST /api/email-imports/:id/dismiss */
+export async function dismissEmailImport(id: number): Promise<void> {
+  const res = await fetch(`/api/email-imports/${id}/dismiss`, { method: 'POST' })
+  if (!res.ok && res.status !== 404) throw new Error('Could not dismiss the email. Try again.')
 }

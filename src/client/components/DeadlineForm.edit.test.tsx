@@ -26,6 +26,10 @@ const MOCK_DEADLINE: Deadline = {
 }
 
 vi.mock('@/client/lib/api.js', () => ({
+  getEmailInbox: vi.fn().mockResolvedValue({ enabled: false, address: null, items: [], lastCheck: null }),
+  checkEmailInbox: vi.fn().mockResolvedValue({ enabled: false, address: null, items: [], lastCheck: null }),
+  acceptEmailImport: vi.fn().mockResolvedValue({ created: 0 }),
+  dismissEmailImport: vi.fn().mockResolvedValue(undefined),
   extractDeadlines: vi.fn().mockResolvedValue({ proposals: [] }),
   createDeadlinesBulk: vi.fn().mockResolvedValue({ created: 0 }),
   getCases: vi.fn().mockResolvedValue([]),

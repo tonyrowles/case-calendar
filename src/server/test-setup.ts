@@ -50,6 +50,21 @@ sqlite.exec(`
   )
 `)
 
+// Create email_imports table (emailed orders waiting for review)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS email_imports (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    messageId   TEXT NOT NULL UNIQUE,
+    fromAddress TEXT NOT NULL,
+    subject     TEXT NOT NULL,
+    receivedAt  TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    reason      TEXT,
+    proposals   TEXT,
+    createdAt   TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+  )
+`)
+
 // Create app_settings table (key/value app settings, e.g. wallpaperTheme)
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS app_settings (

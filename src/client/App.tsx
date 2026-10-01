@@ -8,6 +8,7 @@ import { PaneLayout } from './components/layout/PaneLayout.js'
 import { ShortcutsDialog } from './components/help/ShortcutsDialog.js'
 import { CommandPaletteShell } from './components/help/CommandPaletteShell.js'
 import { ImportDialog } from './components/import/ImportDialog.js'
+import { InboxDialog, useEmailInbox } from './components/import/InboxDialog.js'
 import { useFilters } from './hooks/useFilters.js'
 import { useDeadlineMutations } from './hooks/useDeadlineMutations.js'
 import { useDocumentTitle } from './hooks/useDocumentTitle.js'
@@ -25,6 +26,9 @@ export function App() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [commandKOpen, setCommandKOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [inboxOpen, setInboxOpen] = useState(false)
+  const inboxQuery = useEmailInbox()
+  const pendingEmails = inboxQuery.data?.items.filter(i => i.status === 'pending').length ?? 0
   const [deleteTriggerSignal, setDeleteTriggerSignal] = useState<{ id: number; nonce: number } | null>(null)
 
   // POLISH-04: duplicate source — when set, DeadlineForm receives prefillValues
@@ -259,6 +263,17 @@ export function App() {
         <div className="flex items-baseline justify-between mb-2">
           <h1 className="text-2xl font-semibold">Case Calendar</h1>
           <div className="flex items-baseline gap-4">
+          {inboxQuery.data?.enabled && (
+            <button
+              type="button"
+              onClick={() => setInboxOpen(true)}
+              className={pendingEmails > 0
+                ? 'text-sm font-semibold text-amber-800 hover:underline underline-offset-4'
+                : 'text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline transition-colors'}
+            >
+              {pendingEmails > 0 ? `Inbox (${pendingEmails} to review)` : 'Inbox'}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setImportOpen(true)}
@@ -284,6 +299,7 @@ export function App() {
         {/* Dialogs mount unconditionally — Radix portals content only when open */}
         <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
         <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
+        <InboxDialog open={inboxOpen} onOpenChange={setInboxOpen} />
         <CommandPaletteShell
           open={commandKOpen}
           onOpenChange={setCommandKOpen}

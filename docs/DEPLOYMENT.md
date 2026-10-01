@@ -405,6 +405,34 @@ Prints parsed JSON. Useful for tuning `src/server/lib/nl-parser.ts`. **Cost trac
 
 ---
 
+## Import and Email Import
+
+### Import (paste an order)
+
+Click **Import** in the app header, paste a scheduling order, minute order, stipulation or email, optionally pick the case, and click **Find deadlines**. Claude (`claude-opus-5-5`, via `ANTHROPIC_API_KEY`) proposes every deadline it finds, each with a title, details, type, case and the sentence it came from. Dates the text states outright are marked stated; dates Claude had to derive (e.g. "60 days before trial") are marked **computed: verify** with the computation shown. Edit or uncheck anything, then **Add N deadlines** saves them all in one transaction. Nothing is saved before that. The pasted text is sent to Anthropic; it is not logged.
+
+### Email Import
+
+Email orders to a plus-address (e.g. `you+calendar@gmail.com`; Gmail delivers it to your normal inbox) and review them in the app's **Inbox**.
+
+1. In `.env.local`:
+   ```
+   EMAIL_IMPORT_ENABLED=true
+   EMAIL_IMPORT_ADDRESS=you+calendar@gmail.com
+   EMAIL_IMPORT_ALLOWED_SENDERS=you@gmail.com,you@yourfirm.com
+   ```
+   IMAP uses `imap.gmail.com:993` with the `SMTP_USER` / `SMTP_PASS` Gmail app password from the Email Digest setup (override with `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, `IMAP_PASS`). `ANTHROPIC_API_KEY` must be set.
+2. Restart (tray menu > **Restart server**). The log shows `email import worker started`.
+3. Send or forward an order to the address. Within 5 minutes the app header shows **Inbox (1 to review)** and the wallpaper shows **1 emailed order to review**. Open it, review, **Add**. **Check now** in the Inbox checks immediately.
+
+How it behaves:
+
+- **Read-only mailbox access.** Messages are never marked read, moved or deleted. The last 14 days of mail to the address is checked; each Message-ID is processed once.
+- **Sender check.** A message is processed only if the sender is on `EMAIL_IMPORT_ALLOWED_SENDERS` **and** Gmail recorded a passing DMARC, or an aligned DKIM/SPF, check for it (results stamped by any server other than `mx.google.com` are ignored). Anything else is listed under **Not imported** with the reason and is never sent to Anthropic.
+- **No auto-save.** Extracted deadlines wait in the Inbox until you add them. Adding saves the deadlines and marks the email done in one transaction.
+- Without `ANTHROPIC_API_KEY`, verified emails wait unprocessed and the Inbox says so.
+- Attachments are not read yet: paste the order's text into the email body (or use Import).
+
 ## SAFE Checklist Summary
 
 Each SAFE has an automated proof. Run `cross-env TZ=America/Los_Angeles npm test`.

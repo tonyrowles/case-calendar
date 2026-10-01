@@ -22,6 +22,7 @@ import { caseColorsRouter } from './routes/case-colors.js'
 import { settingsRouter } from './routes/settings.js'
 import { casesRouter } from './routes/cases.js'
 import { importsRouter } from './routes/imports.js'
+import { emailImportsRouter } from './routes/email-imports.js'
 import { logger } from './logger.js'
 import { userContextMiddleware, type AppVariables } from './middleware/user-context.js'
 import { createErrorHandler } from './middleware/error-shape.js'
@@ -30,6 +31,7 @@ import { CORS_ORIGINS, TAILSCALE_CORS_HOSTNAME } from './cors.js'
 import { seedDeadlineTypes } from './seed.js'
 import { startWallpaperWorker } from './workers/wallpaper.js'
 import { startEmailWorker } from './workers/email.js'
+import { startEmailImportWorker } from './workers/email-import.js'
 
 export const app = new Hono<{ Variables: AppVariables }>()
 
@@ -54,6 +56,7 @@ app.route('/api', caseLabelsRouter)
 app.route('/api', caseColorsRouter)
 app.route('/api', settingsRouter)
 app.route('/api', casesRouter)
+app.route('/api', emailImportsRouter)
 
 // OPS-02: Production SPA serving — mount AFTER /api routes so API precedence is intact.
 const isProduction = process.env.NODE_ENV === 'production'
@@ -120,6 +123,7 @@ if (process.env.VITEST !== 'true') {
       } else {
         logger.info('wallpaper disabled (set WALLPAPER_ENABLED=true in .env.local)')
       }
+      startEmailImportWorker() // email-to-inbox import; no-op unless EMAIL_IMPORT_ENABLED=true
       void startEmailWorker()  // EMAIL-01/02/03: async; no-op when unconfigured; never blocks server boot
     }
   )
