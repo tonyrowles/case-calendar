@@ -21,6 +21,7 @@ import { caseLabelsRouter } from './routes/case-labels.js'
 import { caseColorsRouter } from './routes/case-colors.js'
 import { settingsRouter } from './routes/settings.js'
 import { casesRouter } from './routes/cases.js'
+import { importsRouter } from './routes/imports.js'
 import { logger } from './logger.js'
 import { userContextMiddleware, type AppVariables } from './middleware/user-context.js'
 import { createErrorHandler } from './middleware/error-shape.js'
@@ -46,6 +47,7 @@ app.onError(createErrorHandler())
 app.get('/api/identity', (c) => c.json({ user: c.get('user') }))
 
 // Routes
+app.route('/api', importsRouter)
 app.route('/api', deadlinesRouter)
 app.route('/api', deadlineTypesRouter)
 app.route('/api', caseLabelsRouter)
