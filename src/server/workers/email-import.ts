@@ -7,7 +7,8 @@
  *   are not marked read, moved or deleted. Each Message-ID is processed once.
  * - Only allowed senders whose message passed Gmail's own DMARC/DKIM/SPF checks are sent
  *   to the extractor; others are recorded as "rejected" (visible in the Inbox).
- * - The email text is sent to the Anthropic API for extraction (same as Import).
+ * - The email text is sent to the selected LLM provider for extraction (same as Import;
+ *   OpenAI when OPENAI_API_KEY is set, else Anthropic: see lib/llm.ts).
  *
  * .env.local:
  *   EMAIL_IMPORT_ENABLED=true
@@ -23,6 +24,7 @@ import { logger } from '../logger.js'
 import { addEmailImport, getAllDeadlineTypes, hasEmailImport, listDistinctCaseLabels } from '../queries.js'
 import { ExtractorFailedError, extractDeadlines } from '../lib/deadline-extractor.js'
 import { toProposals } from '../lib/proposals.js'
+import { llmConfigured } from '../lib/llm.js'
 import { toISODateString } from '../../shared/lib/date.js'
 
 const CRON_EXPR = '*/5 * * * *'
@@ -151,7 +153,7 @@ export async function pollEmailImports(cfg: EmailImportConfig, now = new Date())
       logger.warn({ fromAddress, reason: sender.reason }, 'email-import: rejected')
       continue
     }
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!llmConfigured()) {
       // Leave it unrecorded so it is processed once a key is configured
       result.skippedNoKey++
       continue
@@ -211,7 +213,7 @@ export async function checkEmailNow(): Promise<void> {
     lastCheck = {
       at: new Date().toISOString(),
       ok: true,
-      error: r.skippedNoKey > 0 ? 'Emails are waiting: set ANTHROPIC_API_KEY in .env.local to read them.' : null,
+      error: r.skippedNoKey > 0 ? 'Emails are waiting: set OPENAI_API_KEY (or ANTHROPIC_API_KEY) in .env.local to read them.' : null,
     }
     if (r.added || r.rejected || r.failed) logger.info(r, 'email-import: poll')
   } catch (err) {

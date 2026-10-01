@@ -3,17 +3,19 @@
  * stipulation, email) as PROPOSALS for the user to review. Nothing here saves anything:
  * the import dialog and the email inbox both require the user to confirm each row.
  *
- * Uses Claude structured outputs (messages.parse + zodOutputFormat) rather than a forced
- * tool call: forced tool_choice is rejected by current models.
+ * Provider per src/server/lib/llm.ts: OpenAI (Responses API structured outputs) when
+ * OPENAI_API_KEY is set, else Claude structured outputs (messages.parse + zodOutputFormat;
+ * forced tool_choice is rejected by current Claude models).
  *
- * Privacy: the text is sent to the Anthropic API (same as NL quick-add). Raw text is
- * never logged; only its length and token usage.
+ * Privacy: the text is sent to the selected provider's API (same as NL quick-add). Raw
+ * text is never logged; only its length and token usage.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import { logger } from '../logger.js'
 import { parseLocalDate } from '../../shared/lib/date.js'
+import { LlmCallError, llmConfigured, llmProvider, openaiModel, openaiParse } from './llm.js'
 
 export const EXTRACT_MODEL = 'claude-opus-5-5'
 const TIMEOUT_MS = 120_000
@@ -75,7 +77,26 @@ function systemPrompt(req: ExtractRequest): string {
   ].join('\n')
 }
 
+function openaiModelFn(): ExtractModelFn {
+  return async (req) => {
+    const parsed = await openaiParse({
+      model: openaiModel(),
+      instructions: systemPrompt(req),
+      input: `<document>
+${req.text}
+</document>`,
+      schema: ExtractionSchema,
+      schemaName: 'deadlines',
+      effort: 'high',
+      maxOutputTokens: 16000,
+      timeoutMs: TIMEOUT_MS,
+    }, 'extract')
+    return parsed.deadlines.map(d => ({ ...d, dateBasis: normalizeBasis(d.dateBasis) }))
+  }
+}
+
 function realModel(): ExtractModelFn {
+  if (llmProvider() === 'openai') return openaiModelFn()
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY!, maxRetries: 1 })
   return async (req) => {
     const response = await client.messages.parse(
@@ -115,8 +136,8 @@ function realModel(): ExtractModelFn {
  * (SAFE-03: parseLocalDate round-trip), exact duplicates are collapsed.
  */
 export async function extractDeadlines(req: ExtractRequest): Promise<RawExtraction[]> {
-  if (modelImpl === null && !process.env.ANTHROPIC_API_KEY) {
-    throw new ExtractorUnconfiguredError('ANTHROPIC_API_KEY is not set')
+  if (modelImpl === null && !llmConfigured()) {
+    throw new ExtractorUnconfiguredError('No LLM API key is set')
   }
   const call = modelImpl ?? realModel()
   let raw: RawExtraction[]
@@ -124,6 +145,7 @@ export async function extractDeadlines(req: ExtractRequest): Promise<RawExtracti
     raw = await call(req)
   } catch (err) {
     if (err instanceof ExtractorFailedError) throw err
+    if (err instanceof LlmCallError) throw new ExtractorFailedError(err.message)
     if (err instanceof Anthropic.APIConnectionTimeoutError) {
       throw new ExtractorFailedError('The request timed out. Try again, or paste a shorter excerpt.')
     }

@@ -407,9 +407,19 @@ Prints parsed JSON. Useful for tuning `src/server/lib/nl-parser.ts`. **Cost trac
 
 ## Import and Email Import
 
+### AI provider
+
+Quick-add, Import and Email Import use one AI provider, chosen in `.env.local`:
+
+- **OpenAI** when `OPENAI_API_KEY` is set. Model: `OPENAI_MODEL` (default `gpt-5.6`). Requests use the Responses API with structured outputs and `store: false`.
+- **Anthropic** otherwise, with `ANTHROPIC_API_KEY` (quick-add `claude-sonnet-4-6`, Import `claude-opus-5-5`).
+- `LLM_PROVIDER=openai` or `LLM_PROVIDER=anthropic` forces one.
+
+API keys are billed separately from ChatGPT or Claude subscriptions: create them at platform.openai.com or console.anthropic.com and fund API credit there. Import and Email Import log each call's token counts (`extract: OpenAI success` / `extract: model success`) in `logs\case-calendar.log`.
+
 ### Import (paste an order)
 
-Click **Import** in the app header, paste a scheduling order, minute order, stipulation or email, optionally pick the case, and click **Find deadlines**. Claude (`claude-opus-5-5`, via `ANTHROPIC_API_KEY`) proposes every deadline it finds, each with a title, details, type, case and the sentence it came from. Dates the text states outright are marked stated; dates Claude had to derive (e.g. "60 days before trial") are marked **computed: verify** with the computation shown. Edit or uncheck anything, then **Add N deadlines** saves them all in one transaction. Nothing is saved before that. The pasted text is sent to Anthropic; it is not logged.
+Click **Import** in the app header, paste a scheduling order, minute order, stipulation or email, optionally pick the case, and click **Find deadlines**. The AI provider proposes every deadline it finds, each with a title, details, type, case and the sentence it came from. Dates the text states outright are marked stated; dates the model had to derive (e.g. "60 days before trial") are marked **computed: verify** with the computation shown. Edit or uncheck anything, then **Add N deadlines** saves them all in one transaction. Nothing is saved before that. The pasted text is sent to the AI provider; it is not logged.
 
 ### Email Import
 
@@ -421,16 +431,16 @@ Email orders to a plus-address (e.g. `you+calendar@gmail.com`; Gmail delivers it
    EMAIL_IMPORT_ADDRESS=you+calendar@gmail.com
    EMAIL_IMPORT_ALLOWED_SENDERS=you@gmail.com,you@yourfirm.com
    ```
-   IMAP uses `imap.gmail.com:993` with the `SMTP_USER` / `SMTP_PASS` Gmail app password from the Email Digest setup (override with `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, `IMAP_PASS`). `ANTHROPIC_API_KEY` must be set.
+   IMAP uses `imap.gmail.com:993` with the `SMTP_USER` / `SMTP_PASS` Gmail app password from the Email Digest setup (override with `IMAP_HOST`, `IMAP_PORT`, `IMAP_USER`, `IMAP_PASS`). An AI provider key (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`) must be set.
 2. Restart (tray menu > **Restart server**). The log shows `email import worker started`.
 3. Send or forward an order to the address. Within 5 minutes the app header shows **Inbox (1 to review)** and the wallpaper shows **1 emailed order to review**. Open it, review, **Add**. **Check now** in the Inbox checks immediately.
 
 How it behaves:
 
 - **Read-only mailbox access.** Messages are never marked read, moved or deleted. The last 14 days of mail to the address is checked; each Message-ID is processed once.
-- **Sender check.** A message is processed only if the sender is on `EMAIL_IMPORT_ALLOWED_SENDERS` **and** Gmail recorded a passing DMARC, or an aligned DKIM/SPF, check for it (results stamped by any server other than `mx.google.com` are ignored). Anything else is listed under **Not imported** with the reason and is never sent to Anthropic.
+- **Sender check.** A message is processed only if the sender is on `EMAIL_IMPORT_ALLOWED_SENDERS` **and** Gmail recorded a passing DMARC, or an aligned DKIM/SPF, check for it (results stamped by any server other than `mx.google.com` are ignored). Anything else is listed under **Not imported** with the reason and is never sent to the AI provider.
 - **No auto-save.** Extracted deadlines wait in the Inbox until you add them. Adding saves the deadlines and marks the email done in one transaction.
-- Without `ANTHROPIC_API_KEY`, verified emails wait unprocessed and the Inbox says so.
+- Without an AI provider key, verified emails wait unprocessed and the Inbox says so.
 - Attachments are not read yet: paste the order's text into the email body (or use Import).
 
 ## SAFE Checklist Summary

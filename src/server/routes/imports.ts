@@ -5,13 +5,14 @@ import { toISODateString } from '../../shared/lib/date.js'
 import { createDeadlines, getAllDeadlineTypes, listDistinctCaseLabels } from '../queries.js'
 import { ExtractorFailedError, ExtractorUnconfiguredError, extractDeadlines } from '../lib/deadline-extractor.js'
 import { toProposals } from '../lib/proposals.js'
+import { LLM_UNCONFIGURED_MESSAGE, llmConfigured } from '../lib/llm.js'
 import { type AppVariables } from '../middleware/user-context.js'
 import { logger } from '../logger.js'
 
 // Import deadlines from a longer text (scheduling order, email): extract -> review -> bulk save.
 export const importsRouter = new Hono<{ Variables: AppVariables }>()
 
-const unconfigured = { error: { code: 'parser_unconfigured', message: 'Set ANTHROPIC_API_KEY in .env.local to enable importing.' } }
+const unconfigured = { error: { code: 'parser_unconfigured', message: LLM_UNCONFIGURED_MESSAGE } }
 
 // POST /api/deadlines/extract { text, caseLabel? } -> { proposals } (nothing is saved)
 importsRouter.post(
@@ -22,7 +23,7 @@ importsRouter.post(
     }
   }),
   async (c) => {
-    if (!process.env.ANTHROPIC_API_KEY) return c.json(unconfigured, 503)
+    if (!llmConfigured()) return c.json(unconfigured, 503)
     const { text, caseLabel } = c.req.valid('json')
     const types = getAllDeadlineTypes()
     const knownCases = listDistinctCaseLabels()

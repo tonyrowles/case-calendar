@@ -8,6 +8,7 @@ import { logger } from '../logger.js'
 import { registerIcsRoute } from './deadlines.ics.js'
 import { parseDeadline, ParserUnconfiguredError, ParserFailedError, ParserTimeoutError } from '../lib/nl-parser.js'
 import { parseLocalDate, toISODateString } from '../../shared/lib/date.js'
+import { LLM_UNCONFIGURED_MESSAGE, llmConfigured } from '../lib/llm.js'
 
 // Schema for POST /api/deadlines/parse request body
 const parseBodySchema = z.object({
@@ -113,9 +114,9 @@ deadlinesRouter.post(
   async (c) => {
     // T-11-02-AUTH: pre-flight env check BEFORE calling parseDeadline
     // Test 11-02-08 asserts parseDeadline is NOT called in this path
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!llmConfigured()) {
       return c.json(
-        { error: { code: 'parser_unconfigured', message: 'Set ANTHROPIC_API_KEY in .env.local to enable NL parsing.' } },
+        { error: { code: 'parser_unconfigured', message: LLM_UNCONFIGURED_MESSAGE } },
         503
       )
     }
@@ -165,7 +166,7 @@ deadlinesRouter.post(
       if (err instanceof ParserUnconfiguredError) {
         logger.warn('nl-parse: ParserUnconfiguredError despite env-set guard')
         return c.json(
-          { error: { code: 'parser_unconfigured', message: 'Set ANTHROPIC_API_KEY in .env.local to enable NL parsing.' } },
+          { error: { code: 'parser_unconfigured', message: LLM_UNCONFIGURED_MESSAGE } },
           503
         )
       }
