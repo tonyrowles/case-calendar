@@ -73,7 +73,7 @@ export function ImportDialog({ open, onOpenChange }: {
           <DialogDescription>
             {rows
               ? 'Review each proposed deadline. Edit anything that is off, uncheck what you don\'t want, then add them.'
-              : 'Paste a scheduling order, minute order, stipulation or email. Claude finds every deadline in it for you to review; nothing is saved until you confirm. The text is sent to Anthropic to be read.'}
+              : 'Paste a scheduling order, minute order, stipulation or email. The AI finds every deadline in it for you to review; nothing is saved until you confirm. The text is sent to the AI provider set in .env.local (OpenAI or Anthropic) to be read.'}
           </DialogDescription>
         </DialogHeader>
 

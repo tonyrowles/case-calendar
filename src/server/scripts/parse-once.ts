@@ -6,6 +6,7 @@
  * Useful for tuning the system prompt without redeploying the server.
  */
 import dotenv from 'dotenv'
+import { llmConfigured } from '../lib/llm.js'
 import { parseDeadline, ParserUnconfiguredError } from '../lib/nl-parser.js'
 import { getAllDeadlineTypes } from '../queries.js'
 import { toISODateString } from '../../shared/lib/date.js'
@@ -19,8 +20,8 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('ANTHROPIC_API_KEY is not set in .env.local. See docs/DEPLOYMENT.md#nl-quick-add-phase-11')
+  if (!llmConfigured()) {
+    console.error('Set OPENAI_API_KEY (or ANTHROPIC_API_KEY) in .env.local. See docs/DEPLOYMENT.md#nl-quick-add-phase-11')
     process.exit(1)
   }
 

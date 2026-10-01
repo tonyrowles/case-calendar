@@ -17,6 +17,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { logger } from '../logger.js'
 import { parseLocalDate } from '../../shared/lib/date.js'
+import { z } from 'zod'
+import { LlmCallError, llmProvider, openaiModel, openaiParse } from './llm.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Exported types
@@ -127,11 +129,57 @@ function buildRealImpl(): AnthropicCreateFn {
 // Main export: parseDeadline
 // ─────────────────────────────────────────────────────────────────────────────
 
+const QuickAddSchema = z.object({
+  caseLabel: z.string().describe('Short case name, e.g. "Smith v. Jones"'),
+  typeName: z.string().describe('One of the allowed deadline types, closest match'),
+  date: z.string().describe('ISO date YYYY-MM-DD'),
+  description: z.string().describe('Optional brief note; empty string if none'),
+})
+
+/** OpenAI path (LLM_PROVIDER / OPENAI_API_KEY, see lib/llm.ts). Same validation as the Claude path. */
+async function parseWithOpenAI(text: string, typeNames: string[], today: string): Promise<ParsedDeadline> {
+  if (!process.env.OPENAI_API_KEY) throw new ParserUnconfiguredError('OPENAI_API_KEY is not set')
+  let parsed: z.infer<typeof QuickAddSchema>
+  try {
+    parsed = await openaiParse({
+      model: openaiModel(),
+      instructions:
+        `Today is ${today}. Extract a single legal-deadline record from the user's input. ` +
+        'Use a date in the FUTURE unless the user clearly says past. ' +
+        'If month/day is ambiguous, prefer US conventions. ' +
+        'If no year given, infer the next occurrence (this year if upcoming, next year if past). ' +
+        `typeName must be the closest of: ${typeNames.join(', ')}.`,
+      input: text,
+      schema: QuickAddSchema,
+      schemaName: 'deadline',
+      effort: 'low',
+      maxOutputTokens: 2000,  // includes reasoning tokens
+      timeoutMs: 15_000,
+    }, 'nl-parse')
+  } catch (err) {
+    if (err instanceof LlmCallError && err.kind === 'timeout') throw new ParserTimeoutError(err.message)
+    throw new ParserFailedError(err instanceof Error ? err.message : 'Unknown error')
+  }
+  // T-11-01-HALLUCINATE: same defense-in-depth date validation as the Claude path (SAFE-03)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed.date) || parseLocalDate(parsed.date) === null) {
+    throw new ParserFailedError('Parser returned invalid date format')
+  }
+  return {
+    caseLabel: parsed.caseLabel,
+    typeName: parsed.typeName,
+    date: parsed.date,
+    description: parsed.description.trim() || null,
+  }
+}
+
 export async function parseDeadline(
   text: string,
   typeNames: string[],
   today: string  // YYYY-MM-DD, from toISODateString(new Date()) in route
 ): Promise<ParsedDeadline> {
+  // Provider: OpenAI when selected (and no Claude test mock is injected)
+  if (anthropicImpl === null && llmProvider() === 'openai') return parseWithOpenAI(text, typeNames, today)
+
   // Guard: if no mock is injected AND the env var is missing, fail fast before
   // buildRealImpl() tries to construct an Anthropic client with an undefined key.
   if (anthropicImpl === null && !process.env.ANTHROPIC_API_KEY) {
