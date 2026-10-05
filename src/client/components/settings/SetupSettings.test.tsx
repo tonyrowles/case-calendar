@@ -13,7 +13,7 @@ vi.mock('@/client/lib/api.js', () => ({
     constructor(message: string, readonly fields: Record<string, string>) { super(message) }
   },
 }))
-import { getConfig, saveConfig, ConfigSaveError } from '@/client/lib/api.js'
+import { getConfig, getUpdateStatus, saveConfig, ConfigSaveError } from '@/client/lib/api.js'
 import { SetupSettings } from './SetupSettings.js'
 
 const KEYS: ConfigKey[] = ['TZ', 'LLM_PROVIDER', 'OPENAI_API_KEY', 'OPENAI_MODEL', 'ANTHROPIC_API_KEY', 'SMTP_USER', 'SMTP_PASS', 'SMTP_HOST', 'SMTP_PORT', 'IMAP_HOST', 'IMAP_PORT', 'EMAIL_DIGEST_ENABLED', 'SMTP_TO', 'SMTP_FROM', 'EMAIL_IMPORT_ENABLED', 'EMAIL_IMPORT_ADDRESS', 'EMAIL_IMPORT_ALLOWED_SENDERS', 'WALLPAPER_ENABLED', 'UPDATE_GITHUB_TOKEN']
@@ -64,7 +64,9 @@ describe('SetupSettings', () => {
   it('shows per-field errors from the server', async () => {
     vi.mocked(saveConfig).mockRejectedValue(new ConfigSaveError('Some values are not valid.', { EMAIL_IMPORT_ADDRESS: 'Not a valid email address.' }))
     renderSetup(config())
-    fireEvent.change(await screen.findByLabelText('Import address'), { target: { value: 'nope' } })
+    // Import is off, so its card starts collapsed
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Email import' }))
+    fireEvent.change(screen.getByLabelText('Import address'), { target: { value: 'nope' } })
     const card = screen.getByTestId('setup-card-email-import')
     fireEvent.click(within(card).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(within(card).getByText('Not a valid email address.')).toBeTruthy())
@@ -75,5 +77,51 @@ describe('SetupSettings', () => {
     renderSetup(config())
     fireEvent.click(await screen.findByRole('switch', { name: 'Show deadlines on the desktop wallpaper' }))
     await waitFor(() => expect(saveConfig).toHaveBeenCalledWith({ WALLPAPER_ENABLED: 'true' }))
+  })
+
+  it('a card that is set up collapses to its status line, with Edit to open it', async () => {
+    const cfg = config({ OPENAI_API_KEY: { value: null, set: true, source: 'app' } })
+    cfg.status.ai = { provider: 'openai', configured: true }
+    renderSetup(cfg)
+    const card = await screen.findByTestId('setup-card-ai-provider')
+    expect(within(card).getByText('Using OpenAI.')).toBeTruthy()
+    expect(within(card).queryByLabelText('OpenAI API key')).toBeNull()
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit AI provider' }))
+    expect(within(card).getByLabelText('OpenAI API key')).toBeTruthy()
+    fireEvent.click(within(card).getByRole('button', { name: 'Done editing AI provider' }))
+    expect(within(card).queryByLabelText('OpenAI API key')).toBeNull()
+  })
+
+  it('a card that is not set up stays open', async () => {
+    renderSetup(config())
+    expect(await screen.findByLabelText('Email address')).toBeTruthy()
+    expect(within(screen.getByTestId('setup-card-email-account')).queryByRole('button', { name: /Edit/ })).toBeNull()
+  })
+
+  it('the Anthropic key sits under Advanced unless one is saved', async () => {
+    renderSetup(config())
+    const card = await screen.findByTestId('setup-card-ai-provider')
+    const field = within(card).getByLabelText('Anthropic API key')
+    expect(field.closest('details')).not.toBeNull()
+    cleanup()
+    renderSetup(config({ ANTHROPIC_API_KEY: { value: null, set: true, source: 'app' } }))
+    const card2 = await screen.findByTestId('setup-card-ai-provider')
+    expect(within(card2).getByLabelText('Anthropic API key').closest('details')).toBeNull()
+  })
+
+  it('the GitHub token shows only when the update check needs it', async () => {
+    vi.mocked(getUpdateStatus).mockResolvedValueOnce({ installed: true, current: '0.2.1', latest: '0.2.1', available: false, usingToken: false, error: null })
+    renderSetup(config())
+    const card = await screen.findByTestId('setup-card-updates')
+    expect(await within(card).findByText('Version 0.2.1 is up to date.')).toBeTruthy()
+    // Up to date: collapsed, token not shown
+    expect(within(card).queryByLabelText(/GitHub token/)).toBeNull()
+    cleanup()
+    vi.mocked(getUpdateStatus).mockResolvedValueOnce({ installed: true, current: '0.2.1', latest: null, available: false, usingToken: false, error: 'No release found. If the repository is private, add a GitHub token below.' })
+    renderSetup(config())
+    const card2 = await screen.findByTestId('setup-card-updates')
+    await within(card2).findByText(/add a GitHub token below/)
+    const token = within(card2).getByLabelText(/GitHub token/)
+    expect(token.closest('details')).toBeNull()
   })
 })
