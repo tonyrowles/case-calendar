@@ -1,6 +1,6 @@
 {
   "name": "case-calendar",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A self-hosted single-user webapp for tracking case deadlines",
   "type": "module",
   "engines": {
