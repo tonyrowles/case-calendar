@@ -92,16 +92,6 @@ const DOCS: DocSpec[] = [
     ],
   },
   {
-    path: '.planning/PROJECT.md',
-    anchors: [
-      '## Key Decisions',
-      'NL parser uses Anthropic Claude',
-      'ANTHROPIC_API_KEY',
-      'Accepted scope deviation',
-      'NL parsing exception (Phase 11)',
-    ],
-  },
-  {
     path: 'scripts/tray.ps1',
     anchors: [
       'if (-not $ProjectRoot)',   // PS 5.1: $PSScriptRoot is empty in param() defaults
