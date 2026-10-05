@@ -13,3 +13,6 @@ data/backups-test/
 drizzle/migrations/
 .DS_Store
 *.tsbuildinfo
+
+# Installer build output (scripts/package-release.ps1)
+release/

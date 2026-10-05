@@ -2,17 +2,28 @@
 #
 # Case Calendar tray app: runs the server with no console window and puts an icon
 # in the notification area with Open / Refresh wallpaper / Restart / Update / Logs /
-# Quit. Restarts the server if it crashes and checks git for updates.
+# Quit. Restarts the server if it crashes and checks for updates.
 #
-# Started at logon by the "CaseCalendar" scheduled task that scripts/install-tray.ps1
-# registers. Manual start (no window; install-tray.ps1 explains why conhost --headless):
+# Two layouts:
+#   Installed (CaseCalendarSetup.exe): <install>\app\release.json exists. Uses the bundled
+#     <install>\node\node.exe, keeps data and logs in %LOCALAPPDATA%\CaseCalendar, and
+#     updates from GitHub Releases (install-update.ps1). Started at logon by the HKCU Run
+#     key the installer adds.
+#   Developer checkout: node on PATH, data\ and logs\ in the checkout, updates via git
+#     (update.ps1). Started at logon by the scheduled task scripts/install-tray.ps1 registers.
+#
+# -Open opens the app in the browser once the server is up (Start menu shortcut, end of
+# install); if the tray is already running, a second launch just opens the browser.
+# Manual start (no window; install-tray.ps1 explains why conhost --headless):
 #   conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File .\scripts\tray.ps1
 #
 # ASCII only: Windows PowerShell 5.1 misreads non-ASCII in BOM-less scripts.
 
 [CmdletBinding()]
 param(
-  [string]$ProjectRoot = ''
+  [string]$ProjectRoot = '',
+  [switch]$Open,
+  [string]$OpenPath = '/'
 )
 
 # Windows PowerShell 5.1 leaves $PSScriptRoot empty in param() defaults; resolve here.
@@ -24,16 +35,35 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
+$Port = 3747
+$AppUrl = "http://127.0.0.1:$Port"
+
 # --- single instance ---------------------------------------------------------
 $createdNew = $false
 $script:mutex = New-Object System.Threading.Mutex($true, 'Local\CaseCalendarTray', [ref]$createdNew)
-if (-not $createdNew) { exit 0 }
+if (-not $createdNew) {
+  if ($Open) { Start-Process ($AppUrl + $OpenPath) }
+  exit 0
+}
+
+# --- layout ------------------------------------------------------------------
+$ReleaseInfoPath = Join-Path $ProjectRoot 'release.json'
+$Installed = Test-Path $ReleaseInfoPath
+$ServerEntry = 'dist\server\src\server\index.js'
+if ($Installed) {
+  $ReleaseInfo = Get-Content $ReleaseInfoPath -Raw | ConvertFrom-Json
+  $NodeExe = Join-Path (Split-Path -Parent $ProjectRoot) 'node\node.exe'
+  $DataHome = Join-Path $env:LOCALAPPDATA 'CaseCalendar'
+  $LogsDir = Join-Path $DataHome 'logs'
+  $ServerEntry = 'server.mjs'   # single-file bundle (scripts/package-release.ps1)
+} else {
+  $ReleaseInfo = $null
+  $NodeExe = 'node'
+  $DataHome = $null
+  $LogsDir = Join-Path $ProjectRoot 'logs'
+}
 
 # --- constants ---------------------------------------------------------------
-$Port = 3747
-$AppUrl = "http://127.0.0.1:$Port"
-$ServerEntry = 'dist\server\src\server\index.js'
-$LogsDir = Join-Path $ProjectRoot 'logs'
 $ServerLog = Join-Path $LogsDir 'case-calendar.log'
 $TrayLog = Join-Path $LogsDir 'tray.log'
 $MaxLogBytes = 10MB
@@ -47,12 +77,15 @@ Set-Location $ProjectRoot
 # --- state -------------------------------------------------------------------
 $script:server = $null            # System.Diagnostics.Process (cmd.exe wrapping node)
 $script:expectStop = $false       # true while we stop the server on purpose
-$script:updating = $null          # update.ps1 process while an update runs
+$script:updating = $null          # update.ps1 process while a (checkout) update runs
 $script:crashTimes = New-Object System.Collections.ArrayList
 $script:gaveUp = $false
 $script:pendingUpdates = 0
 $script:lastNotifiedUpdates = 0
+$script:latestRelease = $null     # installed layout: @{ Version; Url } of a newer release
+$script:lastNotifiedRelease = ''
 $script:nextUpdateCheck = (Get-Date).AddSeconds(30)
+$script:openWhenUp = [bool]$Open
 
 function Write-TrayLog([string]$msg) {
   $line = "[{0}] {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $msg
@@ -138,12 +171,14 @@ function Start-Server {
   }
   Stop-PortOwners
   Rotate-ServerLog
-  $psi = New-Object System.Diagnostics.ProcessStartInfo('cmd.exe', "/d /c node $ServerEntry >> `"$ServerLog`" 2>&1")
+  # cmd /c "<cmd line>": the outer quotes keep a quoted node path intact
+  $psi = New-Object System.Diagnostics.ProcessStartInfo('cmd.exe', "/d /c `"`"$NodeExe`" $ServerEntry >> `"$ServerLog`" 2>&1`"")
   $psi.WorkingDirectory = $ProjectRoot
   $psi.UseShellExecute = $false
   $psi.CreateNoWindow = $true
   # Time zone: the computer's own unless changed in Settings > Setup (no TZ forced here)
   $psi.EnvironmentVariables['NODE_ENV'] = 'production'
+  if ($DataHome) { $psi.EnvironmentVariables['CASE_CALENDAR_DATA'] = $DataHome }
   $script:server = [System.Diagnostics.Process]::Start($psi)
   $script:expectStop = $false
   Set-Status 'running'
@@ -188,9 +223,17 @@ function Test-Server {
   Start-Server
 }
 
-# --- updates -----------------------------------------------------------------
-function Update-Check([bool]$announceNone = $false) {
-  $script:nextUpdateCheck = (Get-Date).Add($UpdateCheckEvery)
+# -Open: open the browser once the server answers (checked on the timer)
+function Test-OpenWhenUp {
+  if (-not $script:openWhenUp) { return }
+  if ((Get-PortOwners).Count -gt 0) {
+    $script:openWhenUp = $false
+    Start-Process ($AppUrl + $OpenPath)
+  }
+}
+
+# --- updates: developer checkout (git) -----------------------------------------
+function Update-CheckGit([bool]$announceNone) {
   $fetch = Invoke-Hidden 'git.exe' 'fetch --quiet' 30000
   if ($fetch.Code -ne 0) {
     Write-TrayLog "git fetch failed: $($fetch.Out)"
@@ -216,8 +259,7 @@ function Update-Check([bool]$announceNone = $false) {
   }
 }
 
-function Start-Update {
-  if ($script:updating) { return }
+function Start-UpdateGit {
   $answer = [System.Windows.Forms.MessageBox]::Show(
     "Install $($script:pendingUpdates) update(s)?`n`nThe server stops, rebuilds, and restarts (about a minute). If anything fails, it rolls back to the current version.",
     'Case Calendar update', 'YesNo', 'Question')
@@ -251,14 +293,88 @@ function Test-Update {
   Update-Check
 }
 
-# --- other actions -------------------------------------------------------------
-function Start-WallpaperRefresh {
-  $psi = New-Object System.Diagnostics.ProcessStartInfo('cmd.exe', "/d /c npm run wallpaper:once >> `"$(Join-Path $LogsDir 'wallpaper-once.log')`" 2>&1")
-  $psi.WorkingDirectory = $ProjectRoot
+# --- updates: installed copy (GitHub Releases) ---------------------------------
+function ConvertTo-Version([string]$s) {
+  $v = $null
+  if ([version]::TryParse(($s -replace '^v', '' -replace '-.*$', ''), [ref]$v)) { return $v }
+  return $null
+}
+
+function Update-CheckRelease([bool]$announceNone) {
+  $url = "https://api.github.com/repos/$($ReleaseInfo.repo)/releases/latest"
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $rel = Invoke-RestMethod -Uri $url -TimeoutSec 15 -UseBasicParsing -Headers @{ 'User-Agent' = 'CaseCalendar'; 'Accept' = 'application/vnd.github+json' }
+  } catch {
+    Write-TrayLog "Release check failed: $($_.Exception.Message)"
+    if ($announceNone) { Show-Balloon 'Case Calendar' 'Could not check for updates (offline?).' 'Warning' }
+    return
+  }
+  $latest = ConvertTo-Version $rel.tag_name
+  $current = ConvertTo-Version $ReleaseInfo.version
+  $asset = @($rel.assets | Where-Object { $_.name -like 'CaseCalendarSetup-*.exe' }) | Select-Object -First 1
+  if ($latest -and $current -and $asset -and $latest -gt $current) {
+    $script:latestRelease = @{ Version = "$latest"; Url = $asset.browser_download_url }
+    Write-TrayLog "Update check: $latest available (installed $current)"
+    $menuUpdate.Text = "Install update (version $latest)"
+    $menuUpdate.Enabled = $true
+    if ($script:lastNotifiedRelease -ne "$latest") {
+      Show-Balloon 'Case Calendar update available' "Version $latest is ready. Right-click the tray icon > Install update."
+      $script:lastNotifiedRelease = "$latest"
+    }
+  } else {
+    $script:latestRelease = $null
+    Write-TrayLog "Update check: up to date ($current)"
+    $menuUpdate.Text = 'Install update (up to date)'
+    $menuUpdate.Enabled = $false
+    if ($announceNone) { Show-Balloon 'Case Calendar' "You are up to date (version $current)." }
+  }
+}
+
+# Hand off to install-update.ps1 (copied to TEMP: the installer replaces this folder),
+# which waits for this tray to exit, downloads and runs the installer silently; the
+# installer starts the tray again when it finishes.
+function Start-UpdateRelease {
+  $r = $script:latestRelease
+  $answer = [System.Windows.Forms.MessageBox]::Show(
+    "Install Case Calendar $($r.Version)?`n`nCase Calendar closes, downloads the update, installs it and starts again (about a minute). Your deadlines and settings are kept.",
+    'Case Calendar update', 'YesNo', 'Question')
+  if ($answer -ne 'Yes') { return }
+  Write-TrayLog "Update to $($r.Version) requested"
+  $helper = Join-Path $env:TEMP 'CaseCalendar-install-update.ps1'
+  Copy-Item -Force (Join-Path $PSScriptRoot 'install-update.ps1') $helper
+  $trayCmd = Join-Path $PSScriptRoot 'tray.ps1'
+  $psi = New-Object System.Diagnostics.ProcessStartInfo('powershell.exe',
+    "-NoProfile -ExecutionPolicy Bypass -File `"$helper`" -Url `"$($r.Url)`" -Version `"$($r.Version)`" -WaitPid $PID -LogsDir `"$LogsDir`" -TrayScript `"$trayCmd`"")
+  $psi.WorkingDirectory = $env:TEMP
   $psi.UseShellExecute = $false
   $psi.CreateNoWindow = $true
   [void][System.Diagnostics.Process]::Start($psi)
-  Show-Balloon 'Case Calendar' 'Refreshing wallpaper...'
+  Show-Balloon 'Case Calendar' "Updating to $($r.Version)... it will start again in about a minute."
+  Exit-Tray
+}
+
+function Update-Check([bool]$announceNone = $false) {
+  $script:nextUpdateCheck = (Get-Date).Add($UpdateCheckEvery)
+  if ($Installed) { Update-CheckRelease $announceNone } else { Update-CheckGit $announceNone }
+}
+
+function Start-Update {
+  if ($script:updating) { return }
+  if ($Installed) { if ($script:latestRelease) { Start-UpdateRelease } } else { Start-UpdateGit }
+}
+
+# --- other actions -------------------------------------------------------------
+function Start-WallpaperRefresh {
+  # The server answers at once (202) and renders in the background
+  try {
+    Invoke-WebRequest -Uri "$AppUrl/api/wallpaper/refresh" -Method Post -Body '{}' -ContentType 'application/json' -UseBasicParsing -TimeoutSec 10 | Out-Null
+    Show-Balloon 'Case Calendar' 'Refreshing wallpaper...'
+  } catch {
+    $msg = 'Could not refresh the wallpaper (is the server running?).'
+    if ("$($_.Exception.Message)" -match '409') { $msg = 'The wallpaper is turned off. Turn it on in Settings > Setup.' }
+    Show-Balloon 'Case Calendar' $msg 'Warning'
+  }
 }
 
 function Exit-Tray {
@@ -291,9 +407,10 @@ $notify.add_DoubleClick({ Start-Process $AppUrl })
 
 # --- main loop ---------------------------------------------------------------
 $timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 5000
+$timer.Interval = 2000
 $timer.add_Tick({
   try {
+    Test-OpenWhenUp
     Test-Update
     Test-Server
     if (-not $script:updating -and (Get-Date) -ge $script:nextUpdateCheck) { Update-Check }
@@ -302,7 +419,9 @@ $timer.add_Tick({
   }
 })
 
-Write-TrayLog "Tray starting in $ProjectRoot"
+$layout = 'checkout'
+if ($Installed) { $layout = "installed $($ReleaseInfo.version)" }
+Write-TrayLog "Tray starting in $ProjectRoot ($layout)"
 Start-Server
 $timer.Start()
 [System.Windows.Forms.Application]::Run()

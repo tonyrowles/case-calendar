@@ -108,7 +108,8 @@ if (process.env.VITEST !== 'true') {
     {
       fetch: app.fetch,
       hostname: '127.0.0.1',   // SAFE-07: never 0.0.0.0
-      port: 3747,
+      // CASE_CALENDAR_PORT: only for smoke-testing a build next to a running copy
+      port: Number(process.env.CASE_CALENDAR_PORT) || 3747,
     },
     (info) => {
       logger.info(`Server listening on http://${info.address}:${info.port}`)

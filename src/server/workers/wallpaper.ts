@@ -11,11 +11,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readdir, stat, unlink } from 'node:fs/promises'
 import cron, { type ScheduledTask } from 'node-cron'
-import { chromium, type Browser, type BrowserContext } from 'playwright'
+import { chromium, type Browser, type BrowserContext } from 'playwright-core'
 import { logger } from '../logger.js'
 import { getSetting, onMutation } from '../queries.js'
 import { spawnPowerShellApply } from './spawn-apply.js'
 import { FALLBACK_TARGET, listMonitors, pickTarget, type WallpaperTarget } from './monitors.js'
+import { DATA_DIR } from '../paths.js'
 
 // --- Constants ---
 
@@ -26,7 +27,7 @@ const KEEP_COUNT = 10
 const CRON_EXPR = '*/30 * * * *'
 /** FullCalendar paint settle (Pitfall 2) */
 const SETTLE_MS = 200
-export const DATA_DIR = path.resolve('data')
+export { DATA_DIR }
 
 // --- Dependency-injection seam (Plan 03 overrides via setApplyWallpaper) ---
 
@@ -96,12 +97,21 @@ async function ensureContext(target: WallpaperTarget): Promise<void> {
 // --- Browser lifecycle ---
 
 async function launchBrowser(): Promise<void> {
-  browser = await chromium.launch({
+  const opts = {
     headless: true,
     // Pitfall 5+6: --no-sandbox required for service-account / restricted contexts;
     // acceptable because browser only loads loopback 127.0.0.1:3747/wallpaper
     args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
-  })
+  }
+  try {
+    browser = await chromium.launch(opts)
+  } catch (err) {
+    // No Playwright Chromium download (an installed copy ships without it): use the
+    // Microsoft Edge that every Windows 10/11 machine has.
+    const reason = err instanceof Error ? err.message.split(/\r?\n/)[0] : String(err)
+    logger.info({ reason }, 'wallpaper: Playwright Chromium unavailable; using Microsoft Edge')
+    browser = await chromium.launch({ ...opts, channel: 'msedge' })
+  }
   context = await browser.newContext({
     viewport: { width: FALLBACK_TARGET.logicalWidth, height: FALLBACK_TARGET.logicalHeight },
     deviceScaleFactor: FALLBACK_TARGET.deviceScaleFactor,
@@ -218,6 +228,13 @@ export async function generateAndApplyWallpaper(): Promise<void> {
 
 // --- Trailing-edge debounce trigger (WALL-05) ---
 
+/** Tray "Refresh wallpaper now": start a render right away (false when the worker is off). */
+export function refreshWallpaperNow(): boolean {
+  if (!running) return false
+  generateAndApplyWallpaper().catch(err => logger.error({ err }, 'wallpaper: manual refresh failed'))
+  return true
+}
+
 export function triggerDebouncedScreenshot(): void {
   if (debounceTimer !== null) {
     clearTimeout(debounceTimer)
@@ -323,7 +340,9 @@ export async function stopWallpaperWorker(): Promise<void> {
 // import.meta.url resolves to this file's path which matches process.argv[1].
 // Without this guard, tsx exits immediately after evaluating the module without
 // ever calling startWallpaperWorker(), so --once would do nothing.
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// Also requires the script name to be this file: in the single-file release bundle
+// (server.mjs) import.meta.url IS the entry point, and the guard must stay inert.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1] && /wallpaper\.[jt]s$/.test(process.argv[1])) {
   startWallpaperWorker()
 }
 

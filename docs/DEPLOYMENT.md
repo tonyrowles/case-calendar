@@ -1,6 +1,37 @@
 # Self-host on Windows
 
-Cold-start runbook for deploying Case Calendar as a Windows service that survives reboot.
+Most people should use the installer (see the README): `CaseCalendarSetup-<version>.exe`
+installs per-user with its own Node, keeps data in `%LOCALAPPDATA%\CaseCalendar`, runs from the
+tray, and updates itself from GitHub Releases. Everything below is for running from a git
+checkout (development, or the original NSSM service setup).
+
+## Installer and releases
+
+- `scripts/package-release.ps1` builds `release\CaseCalendarSetup-<version>.exe`: esbuild bundles
+  the server and its libraries into one minified `server.mjs`; only better-sqlite3 (native
+  addon, C sources stripped) and playwright-core ship as packages (installed against the
+  lockfile). It copies the current `node.exe` (it must match the Node that compiled
+  better-sqlite3) and compiles `installer/case-calendar.iss` with Inno Setup 6
+  (`winget install JRSoftware.InnoSetup`). `-SkipInstaller` stops after staging. About 105 MB
+  installed (85% of it node.exe), about 27 MB to download.
+- `.github/workflows/release.yml` does the same on a clean runner, installs the result silently,
+  smoke-tests the installed server (first run with an empty data folder), uninstalls, and on a
+  version tag publishes a GitHub Release. Cut a release with `npm version minor` then
+  `git push --follow-tags`.
+- Installed layout: `%LOCALAPPDATA%\Programs\Case Calendar\{app,node}`; data, logs and an
+  optional `.env.local` in `%LOCALAPPDATA%\CaseCalendar` (`CASE_CALENDAR_DATA`). The tray starts
+  at sign-in via `HKCU\...\Run\CaseCalendar`.
+- Updates: the tray checks `releases/latest` every 6 hours and runs `install-update.ps1`, which
+  downloads the new installer and runs it silently. The repository must be public for this
+  check (and the download) to work without credentials.
+- The wallpaper uses Playwright's Chromium when present, otherwise the Microsoft Edge built
+  into Windows, so the installer does not ship a browser.
+- The database schema is created at startup (`src/server/schema-init.ts`); new columns need an
+  `ALTER TABLE` there so existing installs pick them up.
+
+---
+
+Cold-start runbook for deploying Case Calendar from a checkout as a Windows service that survives reboot.
 
 ---
 

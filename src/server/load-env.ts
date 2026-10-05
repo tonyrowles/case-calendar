@@ -5,7 +5,8 @@
 // run, so WALLPAPER_ENABLED/TAILSCALE_HOSTNAME in .env.local were ignored unless
 // NSSM injected them. dotenv never overrides vars already set in the environment.
 import dotenv from 'dotenv'
+import { ENV_FILE } from './paths.js'
 
 if (process.env.VITEST !== 'true') {
-  dotenv.config({ path: '.env.local', quiet: true })
+  dotenv.config({ path: ENV_FILE, quiet: true })
 }

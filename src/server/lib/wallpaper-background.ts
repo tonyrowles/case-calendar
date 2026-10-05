@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { DATA_DIR } from '../paths.js'
 
 // The Glass wallpaper theme's optional background image: one file in data/ (gitignored,
 // stays on this machine). Tests use a per-worker scratch dir under data/backups-test/,
@@ -7,7 +8,7 @@ import path from 'node:path'
 const IS_TEST = process.env.VITEST === 'true'
 const DIR = IS_TEST
   ? path.join(process.cwd(), 'data', 'backups-test', process.env.VITEST_POOL_ID || 'main', 'wallpaper-bg')
-  : path.join(process.cwd(), 'data')
+  : DATA_DIR
 const BASENAME = 'wallpaper-background'
 
 export const MAX_BACKGROUND_BYTES = 25 * 1024 * 1024

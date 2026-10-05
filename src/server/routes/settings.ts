@@ -14,6 +14,7 @@ import {
   saveBackground,
 } from '../lib/wallpaper-background.js'
 import { listMonitors, pickTarget } from '../workers/monitors.js'
+import { refreshWallpaperNow } from '../workers/wallpaper.js'
 import { type AppVariables } from '../middleware/user-context.js'
 import { logger } from '../logger.js'
 
@@ -115,6 +116,12 @@ settingsRouter.delete('/wallpaper-background', (c) => {
     logger.error({ err }, 'DELETE /wallpaper-background failed')
     return c.json({ error: { code: 'write_failed', message: "Couldn't remove the image." } }, 500)
   }
+})
+
+// POST /api/wallpaper/refresh -> render and apply now (tray "Refresh wallpaper now")
+settingsRouter.post('/wallpaper/refresh', (c) => {
+  const ok = refreshWallpaperNow()
+  return ok ? c.json({ ok: true }, 202) : c.json({ error: { code: 'wallpaper_off', message: 'The wallpaper is turned off in Settings > Setup.' } }, 409)
 })
 
 // GET /api/displays -> connected monitors, which one the wallpaper uses, and its render size.

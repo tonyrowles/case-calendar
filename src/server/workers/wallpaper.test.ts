@@ -22,7 +22,7 @@ vi.mock('node-cron', () => ({
   },
 }))
 
-vi.mock('playwright', () => {
+vi.mock('playwright-core', () => {
   const page = {
     goto: vi.fn().mockResolvedValue(undefined),
     waitForTimeout: vi.fn().mockResolvedValue(undefined),
@@ -73,7 +73,7 @@ vi.mock('node:fs/promises', () => ({
 }))
 
 import * as wp from './wallpaper.js'
-import { chromium } from 'playwright'
+import { chromium } from 'playwright-core'
 import cron from 'node-cron'
 import { onMutation } from '../queries.js'
 import { logger } from '../logger.js'
