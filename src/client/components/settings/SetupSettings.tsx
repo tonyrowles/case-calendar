@@ -45,16 +45,22 @@ function StatusLine({ tone, children }: { tone: 'ok' | 'off' | 'error'; children
 /**
  * A card of fields saved together with one button. Only changed fields are sent; secret
  * fields start empty (blank = keep the saved value) and can be removed explicitly.
+ * `configured`: the card starts collapsed to its title, switch and status line, with an
+ * Edit button; it opens on its own while something needs attention (configured = false).
  */
-function SetupCard({ title, intro, cfg, fields, toggle, status }: {
+function SetupCard({ title, intro, cfg, fields, toggle, status, configured = false }: {
   title: string
   intro?: React.ReactNode
   cfg: AppConfig
   fields: FieldSpec[]
   toggle?: { key: ConfigKey; label: string }
   status?: React.ReactNode
+  configured?: boolean
 }) {
   const save = useSave()
+  const [editing, setEditing] = useState(false)
+  const collapsible = configured && fields.length > 0
+  const open = !collapsible || editing
   const [draft, setDraft] = useState<Values>({})
   const [errors, setErrors] = useState<Partial<Record<ConfigKey, string>>>({})
   const [message, setMessage] = useState<string | null>(null)
@@ -124,26 +130,36 @@ function SetupCard({ title, intro, cfg, fields, toggle, status }: {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h4 className="font-semibold">{title}</h4>
-          {intro && <p className="text-sm text-muted-foreground mt-0.5">{intro}</p>}
+          {/* The description is for setting up: hidden once the card is set up, until Edit */}
+          {intro && (!configured || editing) && <p className="text-sm text-muted-foreground mt-0.5">{intro}</p>}
         </div>
-        {toggle && (
-          <Switch
-            aria-label={toggle.label}
-            checked={enabled}
-            disabled={save.isPending}
-            onCheckedChange={on => submit({ [toggle.key]: on ? 'true' : 'false' })}
-          />
-        )}
+        <div className="flex items-center gap-2">
+          {collapsible && (
+            <Button type="button" variant="ghost" size="sm" aria-expanded={open} aria-label={`${open ? 'Done editing' : 'Edit'} ${title}`}
+              onClick={() => { setEditing(e => !e); setDraft({}); setErrors({}); setMessage(null) }}>
+              {open ? 'Done' : 'Edit'}
+            </Button>
+          )}
+          {toggle && (
+            <Switch
+              aria-label={toggle.label}
+              checked={enabled}
+              disabled={save.isPending}
+              onCheckedChange={on => submit({ [toggle.key]: on ? 'true' : 'false' })}
+            />
+          )}
+        </div>
       </div>
       {status}
-      {basic.map(renderField)}
-      {advanced.length > 0 && (
+      {!open && message && <p role="status" className="text-xs text-muted-foreground">{message}</p>}
+      {open && basic.map(renderField)}
+      {open && advanced.length > 0 && (
         <details className="text-sm">
           <summary className="cursor-pointer text-muted-foreground">Advanced</summary>
           <div className="space-y-3 mt-3">{advanced.map(renderField)}</div>
         </details>
       )}
-      {fields.length > 0 && (
+      {open && fields.length > 0 && (
         <div className="flex items-center gap-3">
           <Button type="button" size="sm" disabled={!dirty || save.isPending} onClick={() => submit(draft)}>
             {save.isPending ? 'Saving…' : 'Save'}
@@ -215,14 +231,19 @@ function UpdatesCard({ cfg }: { cfg: AppConfig }) {
       : u.available
         ? <StatusLine tone="ok">Version {u.latest} is available (you have {u.current}). Install it from the tray menu: Install update.</StatusLine>
         : <StatusLine tone="ok">Version {u.current} is up to date.</StatusLine>
+  // The token only matters for a private repository: show it when the check says so (or
+  // one is saved); otherwise it stays under Advanced
+  const tokenNeeded = cfg.fields.UPDATE_GITHUB_TOKEN.set || /private|token/i.test(u?.error ?? '')
   return (
     <SetupCard
       title="Updates"
       intro="The tray checks GitHub for new versions every 6 hours."
       cfg={cfg}
       status={status}
+      configured={!!u && !u.error}
       fields={[
         {
+          advanced: !tokenNeeded,
           key: 'UPDATE_GITHUB_TOKEN',
           label: 'GitHub token (only for a private repository)',
           kind: 'secret',
@@ -257,9 +278,10 @@ export function SetupSettings(): React.JSX.Element {
         status={status.ai.configured
           ? <StatusLine tone="ok">Using {status.ai.provider === 'openai' ? 'OpenAI' : 'Anthropic'}.</StatusLine>
           : <StatusLine tone="off">Not set up: add an API key to turn on AI features.</StatusLine>}
+        configured={status.ai.configured}
         fields={[
           { key: 'OPENAI_API_KEY', label: 'OpenAI API key', kind: 'secret', placeholder: 'sk-…', help: <>Create one at platform.openai.com → API keys (separate from a ChatGPT subscription).</> },
-          { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', kind: 'secret', placeholder: 'sk-ant-…', help: 'Optional alternative: console.anthropic.com → API keys.' },
+          { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', kind: 'secret', advanced: !cfg.fields.ANTHROPIC_API_KEY.set, placeholder: 'sk-ant-…', help: 'Optional alternative to OpenAI: console.anthropic.com → API keys.' },
           { key: 'LLM_PROVIDER', label: 'Provider', kind: 'select', advanced: true, options: [
             { value: '', label: 'Automatic (OpenAI when its key is set)' },
             { value: 'openai', label: 'OpenAI' },
@@ -274,6 +296,7 @@ export function SetupSettings(): React.JSX.Element {
         intro="Used to send the daily digest and to read emailed orders (read-only). Gmail needs an app password."
         cfg={cfg}
         status={account ? <StatusLine tone="ok">Account: {account}</StatusLine> : <StatusLine tone="off">No account set.</StatusLine>}
+        configured={!!account && cfg.fields.SMTP_PASS.set}
         fields={[
           { key: 'SMTP_USER', label: 'Email address', kind: 'email', placeholder: 'you@gmail.com' },
           { key: 'SMTP_PASS', label: 'App password', kind: 'secret', placeholder: 'xxxx xxxx xxxx xxxx', help: 'Google Account → Security → 2-Step Verification → App passwords. Not your normal password.' },
@@ -294,6 +317,7 @@ export function SetupSettings(): React.JSX.Element {
           : status.digest.state === 'error'
             ? <StatusLine tone="error">{status.digest.message}</StatusLine>
             : <StatusLine tone="off">Off.</StatusLine>}
+        configured={status.digest.state !== 'error'}
         fields={[
           { key: 'SMTP_TO', label: 'Send to', kind: 'email', placeholder: account || 'you@gmail.com', help: 'Defaults to the account address.' },
         ]}
@@ -309,6 +333,7 @@ export function SetupSettings(): React.JSX.Element {
           : lastCheck && !lastCheck.ok
             ? <StatusLine tone="error">{lastCheck.error}</StatusLine>
             : <StatusLine tone="ok">Checking every 5 minutes{lastCheck ? `; last checked ${new Date(lastCheck.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}.</StatusLine>}
+        configured={cfg.fields.EMAIL_IMPORT_ENABLED.value === 'true' ? status.emailImport.enabled && !(lastCheck && !lastCheck.ok) : true}
         fields={[
           { key: 'EMAIL_IMPORT_ADDRESS', label: 'Import address', kind: 'email', placeholder: account ? account.replace('@', '+calendar@') : 'you+calendar@gmail.com', help: 'A plus-address of the account works: mail to it lands in the same inbox.' },
           { key: 'EMAIL_IMPORT_ALLOWED_SENDERS', label: 'Accept orders from', placeholder: account || 'you@gmail.com, you@firm.com', help: 'Comma-separated. Defaults to the account address. Mail from anyone else is ignored.' },
@@ -321,6 +346,7 @@ export function SetupSettings(): React.JSX.Element {
         cfg={cfg}
         toggle={{ key: 'WALLPAPER_ENABLED', label: 'Show deadlines on the desktop wallpaper' }}
         status={status.wallpaper.running ? <StatusLine tone="ok">On.</StatusLine> : <StatusLine tone="off">Off.</StatusLine>}
+        configured={status.wallpaper.running}
         fields={[]}
       />
 
