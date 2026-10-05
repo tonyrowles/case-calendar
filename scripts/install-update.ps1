@@ -1,18 +1,19 @@
 # scripts/install-update.ps1
 #
-# Installed copy only: download a newer CaseCalendarSetup-<version>.exe and run it silently.
-# Started by tray.ps1 ("Install update"), which copies this file to %TEMP% first (the
-# installer replaces the program folder) and then exits. Steps:
-#   1. wait for the tray process (-WaitPid) to exit
-#   2. download the installer to %TEMP%
-#   3. run it with /VERYSILENT; the installer starts the tray again when it finishes
-# If anything fails before the installer runs, the current version's tray is restarted.
+# Installed copy only: run a downloaded CaseCalendarSetup-<version>.exe silently.
+# Started by tray.ps1 ("Install update") after the server downloaded the installer
+# (POST /api/updates/download, which can use the GitHub token from Settings > Setup).
+# The tray copies this file to %TEMP% first (the installer replaces the program folder)
+# and then exits. Steps:
+#   1. wait for the tray process (-WaitPid) and its server to exit
+#   2. run the installer with /VERYSILENT; it starts the tray again when it finishes
+# If the installer fails, the current version's tray is restarted.
 #
 # ASCII only: Windows PowerShell 5.1 misreads non-ASCII in BOM-less scripts.
 
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory = $true)][string]$Url,
+  [Parameter(Mandatory = $true)][string]$Installer,
   [Parameter(Mandatory = $true)][string]$Version,
   [int]$WaitPid = 0,
   [Parameter(Mandatory = $true)][string]$LogsDir,
@@ -39,22 +40,15 @@ try {
     $p = Get-Process -Id $WaitPid -ErrorAction SilentlyContinue
     if ($p) { [void]$p.WaitForExit(60000) }
   }
-
-  if ($Url -notmatch '^https://github\.com/[^/]+/[^/]+/releases/download/') {
-    throw "Refusing to download from an unexpected address: $Url"
+  if (-not (Test-Path $Installer) -or [System.IO.Path]::GetFileName($Installer) -notlike 'CaseCalendarSetup-*.exe') {
+    throw "Installer not found or unexpected: $Installer"
   }
-  $setup = Join-Path $env:TEMP ("CaseCalendarSetup-{0}.exe" -f ($Version -replace '[^0-9A-Za-z.\-]', ''))
-  Write-Log "Downloading $Url"
-  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-  $ProgressPreference = 'SilentlyContinue'
-  Invoke-WebRequest -Uri $Url -OutFile $setup -UseBasicParsing -TimeoutSec 600 -Headers @{ 'User-Agent' = 'CaseCalendar' }
-  if ((Get-Item $setup).Length -lt 1MB) { throw 'Downloaded installer is too small; aborting.' }
 
-  Write-Log "Running $setup"
-  $proc = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=`"$(Join-Path $LogsDir 'install.log')`"" -PassThru -Wait
+  Write-Log "Running $Installer"
+  $proc = Start-Process -FilePath $Installer -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=`"$(Join-Path $LogsDir 'install.log')`"" -PassThru -Wait
   Write-Log "Installer exited with $($proc.ExitCode)"
   if ($proc.ExitCode -ne 0) { throw "Installer failed (exit code $($proc.ExitCode)); see install.log" }
-  Remove-Item -Force $setup -ErrorAction SilentlyContinue
+  Remove-Item -Force $Installer -ErrorAction SilentlyContinue
   Write-Log "==== update to $Version finished ===="
 } catch {
   Write-Log "Update failed: $($_.Exception.Message)"

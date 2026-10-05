@@ -8,6 +8,7 @@ import { llmConfigured, llmProvider } from '../lib/llm.js'
 import { emailDigestStatus } from '../workers/email.js'
 import { emailImportConfig, emailImportStatus } from '../workers/email-import.js'
 import { wallpaperWorkerRunning } from '../workers/wallpaper.js'
+import { checkForUpdate, downloadUpdate } from '../lib/updates.js'
 import { type AppVariables } from '../middleware/user-context.js'
 import { logger } from '../logger.js'
 
@@ -57,5 +58,19 @@ configRouter.put(
     return c.json(view())
   }
 )
+
+// GET /api/updates: installed copies compare their version with the newest GitHub Release
+configRouter.get('/updates', async (c) => c.json(await checkForUpdate()))
+
+// POST /api/updates/download -> { path, version }: the tray runs the downloaded installer
+configRouter.post('/updates/download', async (c) => {
+  try {
+    return c.json(await downloadUpdate())
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Download failed.'
+    logger.warn({ err }, 'updates: download failed')
+    return c.json({ error: { code: 'update_failed', message } }, 502)
+  }
+})
 
 export { CONFIG_KEYS }

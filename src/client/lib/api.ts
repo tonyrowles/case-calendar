@@ -371,6 +371,7 @@ export type ConfigKey =
   | 'EMAIL_DIGEST_ENABLED' | 'SMTP_TO' | 'SMTP_FROM'
   | 'EMAIL_IMPORT_ENABLED' | 'EMAIL_IMPORT_ADDRESS' | 'EMAIL_IMPORT_ALLOWED_SENDERS'
   | 'WALLPAPER_ENABLED'
+  | 'UPDATE_GITHUB_TOKEN'
 
 /** value is null for secrets (only `set` is reported). source: saved here, from .env.local, or not set. */
 export interface ConfigField { value: string | null; set: boolean; source: 'app' | 'env' | 'unset' }
@@ -407,5 +408,21 @@ export async function saveConfig(values: Partial<Record<ConfigKey, string>>): Pr
     const body = await res.json().catch(() => null)
     throw new ConfigSaveError(body?.error?.message ?? 'Could not save. Try again.', body?.error?.fields ?? {})
   }
+  return res.json()
+}
+
+export interface UpdateStatus {
+  installed: boolean
+  current: string | null
+  latest: string | null
+  available: boolean
+  usingToken: boolean
+  error: string | null
+}
+
+/** GET /api/updates: installed copies check GitHub Releases (with the optional token). */
+export async function getUpdateStatus(): Promise<UpdateStatus> {
+  const res = await fetch('/api/updates')
+  if (!res.ok) throw new Error('Could not check for updates')
   return res.json()
 }
