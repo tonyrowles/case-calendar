@@ -7,6 +7,7 @@ import type { AppConfig, ConfigKey, ConfigField } from '@/client/lib/api.js'
 
 vi.mock('@/client/lib/api.js', () => ({
   getConfig: vi.fn(),
+  getUpdateStatus: vi.fn().mockResolvedValue({ installed: false, current: null, latest: null, available: false, usingToken: false, error: null }),
   saveConfig: vi.fn(),
   ConfigSaveError: class ConfigSaveError extends Error {
     constructor(message: string, readonly fields: Record<string, string>) { super(message) }
@@ -15,7 +16,7 @@ vi.mock('@/client/lib/api.js', () => ({
 import { getConfig, saveConfig, ConfigSaveError } from '@/client/lib/api.js'
 import { SetupSettings } from './SetupSettings.js'
 
-const KEYS: ConfigKey[] = ['TZ', 'LLM_PROVIDER', 'OPENAI_API_KEY', 'OPENAI_MODEL', 'ANTHROPIC_API_KEY', 'SMTP_USER', 'SMTP_PASS', 'SMTP_HOST', 'SMTP_PORT', 'IMAP_HOST', 'IMAP_PORT', 'EMAIL_DIGEST_ENABLED', 'SMTP_TO', 'SMTP_FROM', 'EMAIL_IMPORT_ENABLED', 'EMAIL_IMPORT_ADDRESS', 'EMAIL_IMPORT_ALLOWED_SENDERS', 'WALLPAPER_ENABLED']
+const KEYS: ConfigKey[] = ['TZ', 'LLM_PROVIDER', 'OPENAI_API_KEY', 'OPENAI_MODEL', 'ANTHROPIC_API_KEY', 'SMTP_USER', 'SMTP_PASS', 'SMTP_HOST', 'SMTP_PORT', 'IMAP_HOST', 'IMAP_PORT', 'EMAIL_DIGEST_ENABLED', 'SMTP_TO', 'SMTP_FROM', 'EMAIL_IMPORT_ENABLED', 'EMAIL_IMPORT_ADDRESS', 'EMAIL_IMPORT_ALLOWED_SENDERS', 'WALLPAPER_ENABLED', 'UPDATE_GITHUB_TOKEN']
 
 function config(over: Partial<Record<ConfigKey, Partial<ConfigField>>> = {}): AppConfig {
   const fields = Object.fromEntries(KEYS.map(k => [k, { value: '', set: false, source: 'unset', ...over[k] }])) as AppConfig['fields']

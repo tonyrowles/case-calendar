@@ -21,9 +21,11 @@ checkout (development, or the original NSSM service setup).
 - Installed layout: `%LOCALAPPDATA%\Programs\Case Calendar\{app,node}`; data, logs and an
   optional `.env.local` in `%LOCALAPPDATA%\CaseCalendar` (`CASE_CALENDAR_DATA`). The tray starts
   at sign-in via `HKCU\...\Run\CaseCalendar`.
-- Updates: the tray checks `releases/latest` every 6 hours and runs `install-update.ps1`, which
-  downloads the new installer and runs it silently. The repository must be public for this
-  check (and the download) to work without credentials.
+- Updates: every 6 hours the tray asks the server (`GET /api/updates`), which checks GitHub's
+  `releases/latest`; **Install update** has the server download the installer
+  (`POST /api/updates/download`) and `install-update.ps1` runs it silently. While the
+  repository is private, add a fine-grained GitHub token (this repository only, Contents:
+  Read-only) in **Settings > Setup > Updates**; a public repository needs none.
 - The wallpaper uses Playwright's Chromium when present, otherwise the Microsoft Edge built
   into Windows, so the installer does not ship a browser.
 - The database schema is created at startup (`src/server/schema-init.ts`); new columns need an

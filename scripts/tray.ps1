@@ -294,63 +294,72 @@ function Test-Update {
 }
 
 # --- updates: installed copy (GitHub Releases) ---------------------------------
-function ConvertTo-Version([string]$s) {
-  $v = $null
-  if ([version]::TryParse(($s -replace '^v', '' -replace '-.*$', ''), [ref]$v)) { return $v }
-  return $null
-}
-
+# The server checks and downloads (GET /api/updates, POST /api/updates/download) so it can
+# use the optional GitHub token from Settings > Setup (needed while the repo is private).
 function Update-CheckRelease([bool]$announceNone) {
-  $url = "https://api.github.com/repos/$($ReleaseInfo.repo)/releases/latest"
   try {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $rel = Invoke-RestMethod -Uri $url -TimeoutSec 15 -UseBasicParsing -Headers @{ 'User-Agent' = 'CaseCalendar'; 'Accept' = 'application/vnd.github+json' }
+    $u = Invoke-RestMethod -Uri "$AppUrl/api/updates" -TimeoutSec 30 -UseBasicParsing
   } catch {
-    Write-TrayLog "Release check failed: $($_.Exception.Message)"
-    if ($announceNone) { Show-Balloon 'Case Calendar' 'Could not check for updates (offline?).' 'Warning' }
+    Write-TrayLog "Update check failed: $($_.Exception.Message)"
+    if ($announceNone) { Show-Balloon 'Case Calendar' 'Could not check for updates (is the server running?).' 'Warning' }
     return
   }
-  $latest = ConvertTo-Version $rel.tag_name
-  $current = ConvertTo-Version $ReleaseInfo.version
-  $asset = @($rel.assets | Where-Object { $_.name -like 'CaseCalendarSetup-*.exe' }) | Select-Object -First 1
-  if ($latest -and $current -and $asset -and $latest -gt $current) {
-    $script:latestRelease = @{ Version = "$latest"; Url = $asset.browser_download_url }
-    Write-TrayLog "Update check: $latest available (installed $current)"
-    $menuUpdate.Text = "Install update (version $latest)"
+  if ($u.error) {
+    Write-TrayLog "Update check: $($u.error)"
+    $menuUpdate.Text = 'Install update (check failed)'
+    $menuUpdate.Enabled = $false
+    if ($announceNone) { Show-Balloon 'Case Calendar' $u.error 'Warning' }
+    return
+  }
+  if ($u.available) {
+    $script:latestRelease = @{ Version = "$($u.latest)" }
+    Write-TrayLog "Update check: $($u.latest) available (installed $($u.current))"
+    $menuUpdate.Text = "Install update (version $($u.latest))"
     $menuUpdate.Enabled = $true
-    if ($script:lastNotifiedRelease -ne "$latest") {
-      Show-Balloon 'Case Calendar update available' "Version $latest is ready. Right-click the tray icon > Install update."
-      $script:lastNotifiedRelease = "$latest"
+    if ($script:lastNotifiedRelease -ne "$($u.latest)") {
+      Show-Balloon 'Case Calendar update available' "Version $($u.latest) is ready. Right-click the tray icon > Install update."
+      $script:lastNotifiedRelease = "$($u.latest)"
     }
   } else {
     $script:latestRelease = $null
-    Write-TrayLog "Update check: up to date ($current)"
+    Write-TrayLog "Update check: up to date ($($u.current))"
     $menuUpdate.Text = 'Install update (up to date)'
     $menuUpdate.Enabled = $false
-    if ($announceNone) { Show-Balloon 'Case Calendar' "You are up to date (version $current)." }
+    if ($announceNone) { Show-Balloon 'Case Calendar' "You are up to date (version $($u.current))." }
   }
 }
 
-# Hand off to install-update.ps1 (copied to TEMP: the installer replaces this folder),
-# which waits for this tray to exit, downloads and runs the installer silently; the
-# installer starts the tray again when it finishes.
+# The server downloads the installer; install-update.ps1 (copied to TEMP: the installer
+# replaces this folder) waits for this tray to exit and runs it silently; the installer
+# starts the tray again when it finishes.
 function Start-UpdateRelease {
   $r = $script:latestRelease
   $answer = [System.Windows.Forms.MessageBox]::Show(
-    "Install Case Calendar $($r.Version)?`n`nCase Calendar closes, downloads the update, installs it and starts again (about a minute). Your deadlines and settings are kept.",
+    "Install Case Calendar $($r.Version)?`n`nCase Calendar downloads the update, closes, installs it and starts again (about a minute). Your deadlines and settings are kept.",
     'Case Calendar update', 'YesNo', 'Question')
   if ($answer -ne 'Yes') { return }
   Write-TrayLog "Update to $($r.Version) requested"
+  Set-Status 'downloading update...'
+  try {
+    $dl = Invoke-RestMethod -Method Post -Uri "$AppUrl/api/updates/download" -Body '{}' -ContentType 'application/json' -TimeoutSec 900 -UseBasicParsing
+  } catch {
+    $msg = $_.Exception.Message
+    try { $msg = ($_.ErrorDetails.Message | ConvertFrom-Json).error.message } catch { }
+    Write-TrayLog "Update download failed: $msg"
+    Set-Status 'running'
+    Show-Balloon 'Update not installed' "Download failed: $msg" 'Warning'
+    return
+  }
   $helper = Join-Path $env:TEMP 'CaseCalendar-install-update.ps1'
   Copy-Item -Force (Join-Path $PSScriptRoot 'install-update.ps1') $helper
   $trayCmd = Join-Path $PSScriptRoot 'tray.ps1'
   $psi = New-Object System.Diagnostics.ProcessStartInfo('powershell.exe',
-    "-NoProfile -ExecutionPolicy Bypass -File `"$helper`" -Url `"$($r.Url)`" -Version `"$($r.Version)`" -WaitPid $PID -LogsDir `"$LogsDir`" -TrayScript `"$trayCmd`"")
+    "-NoProfile -ExecutionPolicy Bypass -File `"$helper`" -Installer `"$($dl.path)`" -Version `"$($dl.version)`" -WaitPid $PID -LogsDir `"$LogsDir`" -TrayScript `"$trayCmd`"")
   $psi.WorkingDirectory = $env:TEMP
   $psi.UseShellExecute = $false
   $psi.CreateNoWindow = $true
   [void][System.Diagnostics.Process]::Start($psi)
-  Show-Balloon 'Case Calendar' "Updating to $($r.Version)... it will start again in about a minute."
+  Show-Balloon 'Case Calendar' "Installing $($dl.version)... it will start again in about a minute."
   Exit-Tray
 }
 

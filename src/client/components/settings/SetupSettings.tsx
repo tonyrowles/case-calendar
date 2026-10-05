@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { ConfigSaveError, getConfig, saveConfig, type AppConfig, type ConfigKey } from '@/client/lib/api.js'
+import { ConfigSaveError, getConfig, getUpdateStatus, saveConfig, type AppConfig, type ConfigKey } from '@/client/lib/api.js'
 import { Button } from '@/client/components/ui/button.js'
 import { Input } from '@/client/components/ui/input.js'
 import { Switch } from '@/client/components/ui/switch.js'
@@ -189,6 +189,51 @@ function TimeZoneCard({ cfg }: { cfg: AppConfig }) {
   )
 }
 
+/**
+ * Installed copies: version, newest release, and the optional GitHub token needed while
+ * the repository is private. Developer checkouts update through git and say so.
+ */
+function UpdatesCard({ cfg }: { cfg: AppConfig }) {
+  const updates = useQuery({
+    queryKey: ['updates', cfg.fields.UPDATE_GITHUB_TOKEN.set],   // re-check after the token changes
+    queryFn: getUpdateStatus,
+    staleTime: 60_000,
+  })
+  const u = updates.data
+  if (u && !u.installed) {
+    return (
+      <div className="rounded-lg border bg-card p-4 space-y-1">
+        <h4 className="font-semibold">Updates</h4>
+        <p className="text-sm text-muted-foreground">This copy runs from a git checkout and updates through git (tray menu &gt; Install update).</p>
+      </div>
+    )
+  }
+  const status = !u
+    ? <StatusLine tone="off">{updates.isError ? 'Could not check for updates.' : 'Checking for updates…'}</StatusLine>
+    : u.error
+      ? <StatusLine tone="error">Version {u.current}. {u.error}</StatusLine>
+      : u.available
+        ? <StatusLine tone="ok">Version {u.latest} is available (you have {u.current}). Install it from the tray menu: Install update.</StatusLine>
+        : <StatusLine tone="ok">Version {u.current} is up to date.</StatusLine>
+  return (
+    <SetupCard
+      title="Updates"
+      intro="The tray checks GitHub for new versions every 6 hours."
+      cfg={cfg}
+      status={status}
+      fields={[
+        {
+          key: 'UPDATE_GITHUB_TOKEN',
+          label: 'GitHub token (only for a private repository)',
+          kind: 'secret',
+          placeholder: 'github_pat_…',
+          help: 'github.com/settings/personal-access-tokens → Fine-grained token → only this repository → Contents: Read-only. Leave empty for a public repository.',
+        },
+      ]}
+    />
+  )
+}
+
 /** Settings > Setup: everything that used to need .env.local. Changes apply immediately. */
 export function SetupSettings(): React.JSX.Element {
   const configQuery = useQuery({ queryKey: ['config'], queryFn: getConfig })
@@ -278,6 +323,8 @@ export function SetupSettings(): React.JSX.Element {
         status={status.wallpaper.running ? <StatusLine tone="ok">On.</StatusLine> : <StatusLine tone="off">Off.</StatusLine>}
         fields={[]}
       />
+
+      <UpdatesCard cfg={cfg} />
     </div>
   )
 }

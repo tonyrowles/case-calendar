@@ -19,6 +19,7 @@ export type ConfigKey =
   | 'EMAIL_DIGEST_ENABLED' | 'SMTP_TO' | 'SMTP_FROM'
   | 'EMAIL_IMPORT_ENABLED' | 'EMAIL_IMPORT_ADDRESS' | 'EMAIL_IMPORT_ALLOWED_SENDERS'
   | 'WALLPAPER_ENABLED'
+  | 'UPDATE_GITHUB_TOKEN'
 
 type Kind = 'text' | 'secret' | 'bool' | 'port' | 'timezone' | 'provider' | 'email' | 'emails'
 
@@ -41,6 +42,7 @@ export const CONFIG_FIELDS: Record<ConfigKey, { kind: Kind }> = {
   EMAIL_IMPORT_ADDRESS: { kind: 'email' },
   EMAIL_IMPORT_ALLOWED_SENDERS: { kind: 'emails' },
   WALLPAPER_ENABLED: { kind: 'bool' },
+  UPDATE_GITHUB_TOKEN: { kind: 'secret' },
 }
 
 export const CONFIG_KEYS = Object.keys(CONFIG_FIELDS) as ConfigKey[]
