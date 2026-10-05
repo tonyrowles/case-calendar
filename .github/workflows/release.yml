@@ -117,4 +117,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          gh release create '${{ github.ref_name }}' "release\CaseCalendarSetup-$version.exe" --title "Case Calendar $version" --generate-notes
+          $exe = "release\CaseCalendarSetup-$version.exe"
+          $sha = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          $notes = @(
+            "**Install:** download ``CaseCalendarSetup-$version.exe`` below and run it. Already installed? Use the tray menu: **Install update**.",
+            '',
+            "**Windows warning:** the installer is not code-signed, so SmartScreen says *Windows protected your PC* / *Unknown publisher*. Choose **More info > Run anyway**. See [About the Windows warning](https://github.com/${{ github.repository }}#about-the-windows-warning).",
+            '',
+            "**SHA-256:** ``$sha``",
+            "(check with ``Get-FileHash .\CaseCalendarSetup-$version.exe -Algorithm SHA256``)"
+          ) -join "`n"
+          gh release create '${{ github.ref_name }}' $exe --title "Case Calendar $version" --notes "$notes" --generate-notes

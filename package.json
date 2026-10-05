@@ -2,6 +2,7 @@
   "name": "case-calendar",
   "version": "0.2.2",
   "description": "A self-hosted single-user webapp for tracking case deadlines",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
