@@ -34,7 +34,8 @@ function Stop-Existing {
   # Stop-ScheduledTask ends the task's top process but can leave node running;
   # also close a running tray (its mutex keeps a second copy from starting).
   Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
-    Where-Object { $_.CommandLine -and $_.CommandLine -like '*scripts\tray.ps1*' } |
+    # Only processes running tray.ps1 (-File <path>\tray.ps1), not ones that pass its path along
+    Where-Object { $_.CommandLine -and $_.CommandLine -match '-File\s+"?[^"]*\\tray\.ps1"?(\s|$)' } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
   Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
     Select-Object -ExpandProperty OwningProcess -Unique |
