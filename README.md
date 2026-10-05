@@ -7,15 +7,33 @@ A self-hosted, single-user webapp for a practicing lawyer to track every active 
 ## Install (Windows 10/11)
 
 1. Download `CaseCalendarSetup-<version>.exe` from the [latest release](../../releases/latest) and run it.
-   No administrator rights, Node.js or git needed. (Windows may warn that the app is from an
-   unknown publisher: choose **More info > Run anyway**.)
+   No administrator rights, Node.js or git needed. Windows will probably warn you first; see
+   [About the Windows warning](#about-the-windows-warning).
 2. Your browser opens to **Settings > Setup**: pick your time zone, optionally add an AI key and
    email account, and turn on the desktop wallpaper.
 3. Case Calendar runs from the system tray and starts when you sign in. Updates appear in the
    tray menu (**Install update**).
 
 Your deadlines and settings live in `%LOCALAPPDATA%\CaseCalendar` and are kept across updates
-and uninstall. Building the installer: see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md#installer-and-releases).
+and uninstall.
+
+### About the Windows warning
+
+The installer is not code-signed (signing certificates cost several hundred dollars a year), so
+Windows SmartScreen shows **"Windows protected your PC"** and names the publisher as
+**Unknown publisher**. Choose **More info**, then **Run anyway**. Your browser may also say
+the file "isn't commonly downloaded": choose **Keep**.
+
+To check that you have the genuine file:
+
+- Download it only from this repository's [Releases page](../../releases/latest).
+- Compare its SHA-256 checksum with the one in the release notes. In PowerShell:
+  `Get-FileHash .\CaseCalendarSetup-<version>.exe -Algorithm SHA256`
+- Every installer is built from the public source by [GitHub Actions](../../actions/workflows/release.yml),
+  which installs and tests it before publishing.
+
+The app runs only on your computer: no account, no telemetry, and your deadlines never leave
+your machine (AI features and email send only the text you choose to the provider you set up). Building the installer: see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md#installer-and-releases).
 
 ---
 
@@ -92,4 +110,4 @@ Every safety requirement has an automated proof test. Run `npm test` to confirm 
 
 ## License
 
-Private project; no license file.
+[MIT](./LICENSE)
