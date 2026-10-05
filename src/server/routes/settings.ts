@@ -4,6 +4,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { zValidator } from '@hono/zod-validator'
 import { settingsUpdateSchema, type AppSettings } from '../../shared/schemas/settings.js'
 import { DEFAULT_WALLPAPER_THEME, isWallpaperThemeId } from '../../shared/lib/wallpaper-themes.js'
+import { ICON_SIDES, type IconSide } from '../../shared/lib/wallpaper-layout.js'
 import { getSetting, notifyWallpaperInputsChanged, setSetting } from '../queries.js'
 import {
   MAX_BACKGROUND_BYTES,
@@ -12,17 +13,24 @@ import {
   getBackground,
   saveBackground,
 } from '../lib/wallpaper-background.js'
+import { listMonitors, pickTarget } from '../workers/monitors.js'
 import { type AppVariables } from '../middleware/user-context.js'
 import { logger } from '../logger.js'
 
 export const settingsRouter = new Hono<{ Variables: AppVariables }>()
 
-function currentSettings(): AppSettings {
+export function currentSettings(): AppSettings {
   const theme = getSetting('wallpaperTheme')
+  const side = getSetting('wallpaperIconSide')
+  const columns = getSetting('wallpaperIconColumns')
+  const columnsNum = columns === null || columns === '' ? null : Number(columns)
   const bg = getBackground()
   return {
     wallpaperTheme: isWallpaperThemeId(theme) ? theme : DEFAULT_WALLPAPER_THEME,
     wallpaperBackground: bg ? { version: bg.version } : null,
+    wallpaperIconSide: (ICON_SIDES as readonly string[]).includes(side ?? '') ? (side as IconSide) : 'left',
+    wallpaperIconColumns: columnsNum !== null && Number.isInteger(columnsNum) && columnsNum >= 0 ? columnsNum : null,
+    wallpaperMonitor: getSetting('wallpaperMonitor') || 'primary',
   }
 }
 
@@ -38,7 +46,7 @@ settingsRouter.get('/settings', (c) => {
   }
 })
 
-// PUT /api/settings { wallpaperTheme }
+// PUT /api/settings { wallpaperTheme?, wallpaperIconSide?, wallpaperIconColumns?, wallpaperMonitor? }
 settingsRouter.put(
   '/settings',
   zValidator('json', settingsUpdateSchema, (result, c) => {
@@ -48,7 +56,12 @@ settingsRouter.put(
   }),
   (c) => {
     try {
-      setSetting('wallpaperTheme', c.req.valid('json').wallpaperTheme)
+      const patch = c.req.valid('json')
+      if (patch.wallpaperTheme !== undefined) setSetting('wallpaperTheme', patch.wallpaperTheme)
+      if (patch.wallpaperIconSide !== undefined) setSetting('wallpaperIconSide', patch.wallpaperIconSide)
+      // null = automatic, stored as an empty string
+      if (patch.wallpaperIconColumns !== undefined) setSetting('wallpaperIconColumns', patch.wallpaperIconColumns === null ? '' : String(patch.wallpaperIconColumns))
+      if (patch.wallpaperMonitor !== undefined) setSetting('wallpaperMonitor', patch.wallpaperMonitor)
       return c.json(currentSettings())
     } catch (err) {
       logger.error({ err }, 'PUT /settings failed')
@@ -102,4 +115,13 @@ settingsRouter.delete('/wallpaper-background', (c) => {
     logger.error({ err }, 'DELETE /wallpaper-background failed')
     return c.json({ error: { code: 'write_failed', message: "Couldn't remove the image." } }, 500)
   }
+})
+
+// GET /api/displays -> connected monitors, which one the wallpaper uses, and its render size.
+// ?refresh=1 re-detects instead of using the 10-minute cache.
+settingsRouter.get('/displays', async (c) => {
+  const monitors = await listMonitors(c.req.query('refresh') === '1')
+  const chosen = currentSettings().wallpaperMonitor
+  const target = pickTarget(monitors, chosen)
+  return c.json({ monitors, chosen, target })
 })

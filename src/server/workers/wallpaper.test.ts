@@ -43,6 +43,7 @@ vi.mock('playwright', () => {
 // Mock the queries module to avoid DB dependency
 vi.mock('../queries.js', () => ({
   onMutation: vi.fn(),
+  getSetting: vi.fn().mockReturnValue(null),
 }))
 
 // Mock spawn-apply so tests that call setApplyWallpaper(spawnPowerShellApply) inside
@@ -182,7 +183,7 @@ describe('WALL-01: Playwright screenshot integration', () => {
     const page = await context.newPage.mock.results[0]?.value
 
     expect(page.goto).toHaveBeenCalledWith(
-      expect.stringMatching(/^http:\/\/127\.0\.0\.1:3747\/wallpaper\?t=/),
+      expect.stringMatching(/^http:\/\/127\.0\.0\.1:3747\/wallpaper\?w=\d+&h=\d+&t=\d+$/),
       expect.objectContaining({ waitUntil: 'networkidle' })
     )
   })

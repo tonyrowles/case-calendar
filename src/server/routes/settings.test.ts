@@ -32,7 +32,10 @@ describe('/api/settings', () => {
   })
 
   it('ST1: defaults to the light theme with no background image', async () => {
-    expect(await settings()).toEqual({ wallpaperTheme: 'light', wallpaperBackground: null })
+    expect(await settings()).toEqual({
+      wallpaperTheme: 'light', wallpaperBackground: null,
+      wallpaperIconSide: 'left', wallpaperIconColumns: null, wallpaperMonitor: 'primary',
+    })
   })
 
   it('ST2: PUT saves the wallpaper theme', async () => {
@@ -46,6 +49,27 @@ describe('/api/settings', () => {
     expect((await putJson({ wallpaperTheme: 'neon' })).status).toBe(422)
     expect((await putJson({ wallpaperTheme: 'dark', other: 1 })).status).toBe(422)
     expect((await settings()).wallpaperTheme).toBe('light')
+  })
+
+  it('ST5: screen settings save independently (partial updates); null columns = automatic', async () => {
+    expect((await putJson({ wallpaperIconSide: 'right' })).status).toBe(200)
+    expect((await putJson({ wallpaperIconColumns: 4 })).status).toBe(200)
+    expect((await putJson({ wallpaperMonitor: '\\?\DISPLAY#SAM7474#5' })).status).toBe(200)
+    expect(await settings()).toMatchObject({ wallpaperTheme: 'light', wallpaperIconSide: 'right', wallpaperIconColumns: 4, wallpaperMonitor: '\\?\DISPLAY#SAM7474#5' })
+    await putJson({ wallpaperIconColumns: null })
+    expect((await settings()).wallpaperIconColumns).toBeNull()
+  })
+
+  it('ST6: rejects bad screen settings and empty updates', async () => {
+    expect((await putJson({ wallpaperIconSide: 'top' })).status).toBe(422)
+    expect((await putJson({ wallpaperIconColumns: 99 })).status).toBe(422)
+    expect((await putJson({ wallpaperIconColumns: 2.5 })).status).toBe(422)
+    expect((await putJson({})).status).toBe(422)
+  })
+
+  it('ST7: GET /api/displays reports the render target (fallback size when no monitors are detected)', async () => {
+    const res = await (await app.request('/api/displays')).json()
+    expect(res.target).toMatchObject({ logicalWidth: 7680, logicalHeight: 2160, deviceScaleFactor: 1, monitorId: null })
   })
 
   it('ST4: an unrecognized stored value falls back to the default theme', async () => {

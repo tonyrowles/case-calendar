@@ -350,3 +350,17 @@ export async function dismissEmailImport(id: number): Promise<void> {
   const res = await fetch(`/api/email-imports/${id}/dismiss`, { method: 'POST' })
   if (!res.ok && res.status !== 404) throw new Error('Could not dismiss the email. Try again.')
 }
+
+export interface DisplayMonitor { id: string; left: number; top: number; width: number; height: number; scale: number; primary: boolean }
+export interface DisplaysInfo {
+  monitors: DisplayMonitor[]
+  chosen: string
+  target: { monitorId: string | null; logicalWidth: number; logicalHeight: number; deviceScaleFactor: number }
+}
+
+/** GET /api/displays: connected monitors and what the wallpaper renders for. */
+export async function getDisplays(refresh = false): Promise<DisplaysInfo> {
+  const res = await fetch(`/api/displays${refresh ? '?refresh=1' : ''}`)
+  if (!res.ok) throw new Error('Failed to detect monitors')
+  return res.json()
+}

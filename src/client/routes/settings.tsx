@@ -7,6 +7,7 @@ import { AddTypeRow } from '@/client/components/settings/AddTypeRow.js'
 import { SubscribeIcalItem } from '@/client/components/settings/SubscribeIcalItem.js'
 import { CaseList } from '@/client/components/settings/CaseList.js'
 import { WallpaperSettings } from '@/client/components/settings/WallpaperSettings.js'
+import { ScreenSettings } from '@/client/components/settings/ScreenSettings.js'
 
 export function SettingsPage() {
   const typesQuery = useQuery({
@@ -41,6 +42,9 @@ export function SettingsPage() {
           How the desktop wallpaper looks. Changes show on the desktop within a few seconds.
         </p>
         <WallpaperSettings />
+        <div className="rounded-lg border bg-card p-4 mt-3">
+          <ScreenSettings />
+        </div>
       </section>
 
       <section className="mt-8">

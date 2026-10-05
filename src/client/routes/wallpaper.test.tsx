@@ -38,18 +38,24 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function renderWithQuery(ui: React.ReactElement, { deadlines = [] as Deadline[], types = [] as DeadlineType[], initialPath = '/', settings = { wallpaperTheme: 'light', wallpaperBackground: null } as AppSettings, caseColors = [] as Array<{ caseLabel: string; color: string }> } = {}) {
+// Unless a test sets ?w=&h=, render at the G9 size these tests were written for
+function withG9Size(path: string): string {
+  if (/[?&]w=/.test(path)) return path
+  return path + (path.includes('?') ? '&' : '?') + 'w=7680&h=2160'
+}
+
+function renderWithQuery(ui: React.ReactElement, { deadlines = [] as Deadline[], types = [] as DeadlineType[], initialPath = '/', settings = { wallpaperTheme: 'light', wallpaperBackground: null } as Partial<AppSettings>, caseColors = [] as Array<{ caseLabel: string; color: string }> } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   // Pre-populate the cache so useQuery reads from it without firing queryFn
   queryClient.setQueryData(['deadlines'], deadlines)
   queryClient.setQueryData(['deadline-types'], types)
-  queryClient.setQueryData(['settings'], settings)
+  queryClient.setQueryData(['settings'], { wallpaperTheme: 'light', wallpaperBackground: null, ...{ wallpaperIconSide: 'left' as const, wallpaperIconColumns: null, wallpaperMonitor: 'primary' }, ...settings })
   queryClient.setQueryData(['case-colors'], caseColors)
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[initialPath]}>
+      <MemoryRouter initialEntries={[withG9Size(initialPath)]}>
         {ui}
       </MemoryRouter>
     </QueryClientProvider>
@@ -386,7 +392,7 @@ describe('WALL-06: timestamp + layout + empty state', () => {
       id, date, caseLabel: `Case ${id}`, typeId: 1, completedAt: null,
       createdAt: `2026-01-01T00:00:${String(id).padStart(2, '0')}Z`, updatedAt: '2026-01-01T00:00:00Z', description: null,
     })
-    // 12 next week + 5 later = 17 rows > 14-row budget
+    // 12 next week + 5 later = 17 rows > the 14-row budget at 7680x2160
     const deadlines = [
       ...Array.from({ length: 12 }, (_, i) => mk(i + 1, '2026-05-26')),
       ...Array.from({ length: 5 }, (_, i) => mk(i + 20, '2026-07-01')),
@@ -444,7 +450,7 @@ describe('WALL-06: timestamp + layout + empty state', () => {
     const expected = caseColor('Smith v. Jones')
     const toRgb = (hex: string) => `rgb(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)})`
     for (const chip of chips) {
-      expect(chip.style.borderColor).toBe(toRgb(expected))
+      expect(chip.style.borderLeftColor).toBe(toRgb(expected))
       const badge = chip.querySelector('[data-testid="wallpaper-case-badge"]') as HTMLElement
       expect(badge.textContent).toBe('Smith v. Jones')
       expect(badge.style.backgroundColor).toBe(toRgb(expected))
@@ -524,7 +530,7 @@ describe('Wallpaper themes', () => {
   })
 
   it('Glass uses the uploaded background image (cache-busted by version); other themes ignore it', () => {
-    const settings: AppSettings = { wallpaperTheme: 'glass', wallpaperBackground: { version: 123 } }
+    const settings: Partial<AppSettings> = { wallpaperTheme: 'glass', wallpaperBackground: { version: 123 } }
     const glass = renderWithQuery(<WallpaperView />, { settings })
     expect(root(glass.container).style.background).toContain('/api/wallpaper-background?v=123')
     cleanup()

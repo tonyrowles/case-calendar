@@ -29,7 +29,8 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function renderSettings(settings: AppSettings) {
+function renderSettings(partial: Omit<AppSettings, 'wallpaperIconSide' | 'wallpaperIconColumns' | 'wallpaperMonitor'> & Partial<AppSettings>) {
+  const settings: AppSettings = { ...{ wallpaperIconSide: 'left' as const, wallpaperIconColumns: null, wallpaperMonitor: 'primary' }, ...partial }
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
   qc.setQueryData(['settings'], settings)
   return render(
