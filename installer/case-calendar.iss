@@ -14,7 +14,9 @@
   #error AppVersion is required (/DAppVersion=x.y.z)
 #endif
 
-#define TrayCmd "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File ""{app}\app\scripts\tray.ps1"""
+; Single-quoted ISPP string: the doubled quotes stay doubled, which is what Inno's quoted
+; Parameters/ValueData values need for a literal quote around the path
+#define TrayCmd '--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File ""{app}\app\scripts\tray.ps1""'
 
 [Setup]
 AppId={{6F3C2B1E-9A47-4C8D-B5E2-3D1F0A7C9E64}
