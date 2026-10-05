@@ -45,7 +45,11 @@ try {
   }
 
   Write-Log "Running $Installer"
-  $proc = Start-Process -FilePath $Installer -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=`"$(Join-Path $LogsDir 'install.log')`"" -PassThru -Wait
+  # Not Start-Process -Wait: that waits for the whole process tree, including the tray the
+  # installer starts at the end, so it would never return
+  $proc = Start-Process -FilePath $Installer -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=`"$(Join-Path $LogsDir 'install.log')`"" -PassThru
+  $null = $proc.Handle   # keep a handle so ExitCode is available after exit
+  $proc.WaitForExit()
   Write-Log "Installer exited with $($proc.ExitCode)"
   if ($proc.ExitCode -ne 0) { throw "Installer failed (exit code $($proc.ExitCode)); see install.log" }
   Remove-Item -Force $Installer -ErrorAction SilentlyContinue
