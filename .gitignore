@@ -16,3 +16,7 @@ drizzle/migrations/
 
 # Installer build output (scripts/package-release.ps1)
 release/
+
+# Personal planning notes (kept locally, not published)
+.planning/
+CLAUDE.md

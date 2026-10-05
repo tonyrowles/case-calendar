@@ -283,7 +283,7 @@ export function startWallpaperWorker(): void {
       )
     },
     {
-      timezone: process.env.TZ ?? 'America/Los_Angeles',
+      timezone: process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone,
       noOverlap: true,
       name: 'wallpaper-cron',
     }

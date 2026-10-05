@@ -169,7 +169,7 @@ describe('WALL-01: Playwright screenshot integration', () => {
     const resolvedBrowser = await browser
     expect(resolvedBrowser.newContext).toHaveBeenCalledWith(
       expect.objectContaining({
-        viewport: { width: 7680, height: 2160 },
+        viewport: { width: 1920, height: 1080 },
         deviceScaleFactor: 1,
       })
     )

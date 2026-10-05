@@ -225,7 +225,7 @@ export async function startEmailWorker(): Promise<void> {
       }
     },
     {
-      timezone: process.env.TZ ?? 'America/Los_Angeles',
+      timezone: process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone,
       noOverlap: true,           // T-10-OVERLAP mitigation
       name: 'email-digest-cron',
     }
@@ -233,7 +233,7 @@ export async function startEmailWorker(): Promise<void> {
 
   status = { state: 'on', message: null }
   logger.info(
-    { schedule: '0 7 * * *', tz: process.env.TZ ?? 'America/Los_Angeles' },
+    { schedule: '0 7 * * *', tz: process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone },
     'email digest worker started'
   )
 }

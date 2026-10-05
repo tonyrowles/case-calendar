@@ -23,8 +23,8 @@ export interface WallpaperTarget {
   deviceScaleFactor: number
 }
 
-/** Used when monitors can't be detected (non-Windows, script failure): the original G9 size. */
-export const FALLBACK_TARGET: WallpaperTarget = { monitorId: null, logicalWidth: 7680, logicalHeight: 2160, deviceScaleFactor: 1 }
+/** Used when monitors can't be detected (non-Windows, script failure): the most common screen size. */
+export const FALLBACK_TARGET: WallpaperTarget = { monitorId: null, logicalWidth: 1920, logicalHeight: 1080, deviceScaleFactor: 1 }
 
 const PS1 = path.resolve('scripts/monitors.ps1')
 const CACHE_MS = 10 * 60_000
