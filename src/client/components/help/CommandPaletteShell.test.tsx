@@ -27,6 +27,9 @@ vi.mock('@/client/lib/api.js', () => ({
   uploadWallpaperBackground: vi.fn().mockResolvedValue({ version: 1 }),
   deleteWallpaperBackground: vi.fn().mockResolvedValue(undefined),
   wallpaperBackgroundUrl: (v: number) => `/api/wallpaper-background?v=${v}`,
+  getConfig: vi.fn().mockReturnValue(new Promise(() => {})),
+  saveConfig: vi.fn(),
+  ConfigSaveError: class extends Error {},
   getCaseColors: vi.fn().mockResolvedValue([]),
   parseDeadline: vi.fn(),
   ApiError: class ApiError extends Error {

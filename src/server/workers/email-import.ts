@@ -44,10 +44,10 @@ export interface EmailImportConfig {
 export function emailImportConfig(env: NodeJS.ProcessEnv = process.env): EmailImportConfig | null {
   if (env.EMAIL_IMPORT_ENABLED !== 'true') return null
   const address = env.EMAIL_IMPORT_ADDRESS?.trim().toLowerCase()
-  const user = (env.IMAP_USER ?? env.SMTP_USER)?.trim()
-  const pass = (env.IMAP_PASS ?? env.SMTP_PASS)?.replace(/\s+/g, '')
+  const user = (env.IMAP_USER || env.SMTP_USER)?.trim()
+  const pass = (env.IMAP_PASS || env.SMTP_PASS)?.replace(/\s+/g, '')
   if (!address || !user || !pass) return null
-  const allowed = (env.EMAIL_IMPORT_ALLOWED_SENDERS ?? user)
+  const allowed = (env.EMAIL_IMPORT_ALLOWED_SENDERS?.trim() || user)
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
   return {
     address,
@@ -199,6 +199,7 @@ export async function pollEmailImports(cfg: EmailImportConfig, now = new Date())
 let lastCheck: { at: string; ok: boolean; error: string | null } | null = null
 let running = false
 let cronTask: ScheduledTask | null = null
+let startupTimer: ReturnType<typeof setTimeout> | null = null
 
 export function emailImportStatus(): { at: string; ok: boolean; error: string | null } | null {
   return lastCheck
@@ -213,7 +214,7 @@ export async function checkEmailNow(): Promise<void> {
     lastCheck = {
       at: new Date().toISOString(),
       ok: true,
-      error: r.skippedNoKey > 0 ? 'Emails are waiting: set OPENAI_API_KEY (or ANTHROPIC_API_KEY) in .env.local to read them.' : null,
+      error: r.skippedNoKey > 0 ? 'Emails are waiting: add an OpenAI or Anthropic API key in Settings > Setup to read them.' : null,
     }
     if (r.added || r.rejected || r.failed) logger.info(r, 'email-import: poll')
   } catch (err) {
@@ -228,15 +229,25 @@ export async function checkEmailNow(): Promise<void> {
 export function startEmailImportWorker(): void {
   const cfg = emailImportConfig()
   if (!cfg) {
-    logger.info('email import disabled (set EMAIL_IMPORT_ENABLED=true and EMAIL_IMPORT_ADDRESS in .env.local)')
+    logger.info('email import disabled (turn it on in Settings > Setup)')
     return
   }
   cronTask = cron.schedule(CRON_EXPR, () => { void checkEmailNow() }, { noOverlap: true, name: 'email-import' })
-  setTimeout(() => { void checkEmailNow() }, 15_000)
+  startupTimer = setTimeout(() => { void checkEmailNow() }, 15_000)
   logger.info({ address: cfg.address, schedule: CRON_EXPR }, 'email import worker started')
 }
 
-export function __stopEmailImportWorker(): void {
+export function stopEmailImportWorker(): void {
   cronTask?.stop()
   cronTask = null
+  if (startupTimer) clearTimeout(startupTimer)
+  startupTimer = null
+}
+export const __stopEmailImportWorker = stopEmailImportWorker
+
+/** Pick up changed settings: stop, then start again if still configured. */
+export function restartEmailImportWorker(): void {
+  stopEmailImportWorker()
+  lastCheck = null
+  startEmailImportWorker()
 }

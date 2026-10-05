@@ -1,11 +1,7 @@
-// DATA-06: TZ MUST be set in the environment before Node.js starts — not here.
-// In ESM, all static import declarations are hoisted and evaluated before any
-// module body code runs, so a process.env.TZ assignment at this line executes
-// AFTER db.ts side effects (db open, startup backup, triggers) have already run.
-// The npm scripts use `cross-env TZ=America/Los_Angeles` which sets the env var
-// before the Node.js process starts, which is the only correct approach.
-// For direct invocations (e.g. `node dist/server/index.js`), ensure TZ is set
-// in the shell or via a wrapper: `TZ=America/Los_Angeles node dist/server/index.js`
+// DATA-06: time zone. Default is the computer's own; Settings > Setup can override it
+// (applyStoredConfig below sets process.env.TZ, which Node honors at runtime). Imports are
+// evaluated first, so db.ts's startup backup is named in the environment/computer zone.
+// Tests pin TZ=America/Los_Angeles via the npm test scripts.
 
 import './load-env.js'                    // must stay first: loads .env.local before any module reads process.env
 import { serve } from '@hono/node-server'
@@ -29,9 +25,9 @@ import { createErrorHandler } from './middleware/error-shape.js'
 import { CORS_ORIGINS, TAILSCALE_CORS_HOSTNAME } from './cors.js'
 // seedDeadlineTypes is created by Plan 01-03 — both plans are wave 2 siblings
 import { seedDeadlineTypes } from './seed.js'
-import { startWallpaperWorker } from './workers/wallpaper.js'
-import { startEmailWorker } from './workers/email.js'
-import { startEmailImportWorker } from './workers/email-import.js'
+import { startServices } from './services.js'
+import { applyStoredConfig } from './lib/config.js'
+import { configRouter } from './routes/config.js'
 
 export const app = new Hono<{ Variables: AppVariables }>()
 
@@ -55,6 +51,7 @@ app.route('/api', deadlineTypesRouter)
 app.route('/api', caseLabelsRouter)
 app.route('/api', caseColorsRouter)
 app.route('/api', settingsRouter)
+app.route('/api', configRouter)
 app.route('/api', casesRouter)
 app.route('/api', emailImportsRouter)
 
@@ -99,6 +96,9 @@ if (isProduction) {
   })
 }
 
+// Settings > Setup values override .env.local (before anything reads them)
+if (process.env.VITEST !== 'true') applyStoredConfig()
+
 // DATA-05: Seed default deadline types on startup (idempotent INSERT OR IGNORE)
 seedDeadlineTypes()
 
@@ -118,13 +118,7 @@ if (process.env.VITEST !== 'true') {
           'cors: tailscale origins allowed (http + https)'
         )
       }
-      if (process.env.WALLPAPER_ENABLED === 'true') {
-        startWallpaperWorker()   // WALL-01/02/04/05: fire-and-forget; non-blocking
-      } else {
-        logger.info('wallpaper disabled (set WALLPAPER_ENABLED=true in .env.local)')
-      }
-      startEmailImportWorker() // email-to-inbox import; no-op unless EMAIL_IMPORT_ENABLED=true
-      void startEmailWorker()  // EMAIL-01/02/03: async; no-op when unconfigured; never blocks server boot
+      startServices()   // wallpaper, email import, email digest (each a no-op unless set up)
     }
   )
 }

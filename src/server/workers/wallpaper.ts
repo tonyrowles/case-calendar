@@ -72,7 +72,12 @@ async function currentTarget(): Promise<WallpaperTarget> {
 
 let contextKey = ''
 function targetKey(t: WallpaperTarget): string {
-  return `${t.logicalWidth}x${t.logicalHeight}@${t.deviceScaleFactor}`
+  return `${t.logicalWidth}x${t.logicalHeight}@${t.deviceScaleFactor}@${timeZone()}`
+}
+
+/** The page decides "today" from the browser's clock: render in the app's time zone. */
+function timeZone(): string | undefined {
+  return process.env.TZ || undefined
 }
 /** (Re)create the browser context when the target size or scaling changes. */
 async function ensureContext(target: WallpaperTarget): Promise<void> {
@@ -83,6 +88,7 @@ async function ensureContext(target: WallpaperTarget): Promise<void> {
   context = await browser!.newContext({
     viewport: { width: target.logicalWidth, height: target.logicalHeight },
     deviceScaleFactor: target.deviceScaleFactor,
+    timezoneId: timeZone(),
   })
   contextKey = key
 }
@@ -99,6 +105,7 @@ async function launchBrowser(): Promise<void> {
   context = await browser.newContext({
     viewport: { width: FALLBACK_TARGET.logicalWidth, height: FALLBACK_TARGET.logicalHeight },
     deviceScaleFactor: FALLBACK_TARGET.deviceScaleFactor,
+    timezoneId: timeZone(),
   })
   contextKey = targetKey(FALLBACK_TARGET)
 }
@@ -240,6 +247,9 @@ export function startWallpaperWorker(): void {
     return
   }
 
+  if (running) return
+  running = true
+
   // Launch persistent browser, then render once so a (re)started server refreshes the
   // wallpaper immediately instead of waiting up to 30 min for the first cron tick.
   // Called from serve()'s listening callback, so /wallpaper is already reachable.
@@ -265,7 +275,12 @@ export function startWallpaperWorker(): void {
   // Subscribe to HOOK-04 mutation events (WALL-05); single-subscriber slot
   onMutation(triggerDebouncedScreenshot)
 
-  // SIGTERM/SIGINT handlers — close browser gracefully before exit
+  // SIGTERM/SIGINT handlers — close browser gracefully before exit (registered once per process)
+  if (signalsHooked) {
+    logger.info({ schedule: CRON_EXPR }, 'wallpaper worker started')
+    return
+  }
+  signalsHooked = true
   process.once('SIGTERM', () => {
     cronTask?.stop()
     closeBrowser()
@@ -280,9 +295,26 @@ export function startWallpaperWorker(): void {
   })
 
   logger.info(
-    { schedule: CRON_EXPR, debounceMs: DEBOUNCE_MS, dpr: 1, viewport: '7680x2160' },
+    { schedule: CRON_EXPR, debounceMs: DEBOUNCE_MS },
     'wallpaper worker started'
   )
+}
+
+let running = false
+let signalsHooked = false
+export function wallpaperWorkerRunning(): boolean { return running }
+
+/** Settings > Setup turned the wallpaper off: stop the schedule and close the browser. */
+export async function stopWallpaperWorker(): Promise<void> {
+  if (!running) return
+  running = false
+  cronTask?.stop()
+  cronTask = null
+  if (debounceTimer !== null) clearTimeout(debounceTimer)
+  debounceTimer = null
+  onMutation(() => {})
+  await closeBrowser().catch(err => logger.warn({ err }, 'wallpaper: browser close failed'))
+  logger.info('wallpaper worker stopped')
 }
 
 // --- Module entry-point guard (for `npm run wallpaper:once` via tsx) ---
@@ -307,6 +339,7 @@ export function __resetForTests(): void {
     debounceTimer = null
   }
   // Reset module state to initial values
+  running = false
   browser = null
   context = null
   isGenerating = false
