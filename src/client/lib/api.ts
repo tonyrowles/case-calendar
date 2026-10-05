@@ -364,3 +364,48 @@ export async function getDisplays(refresh = false): Promise<DisplaysInfo> {
   if (!res.ok) throw new Error('Failed to detect monitors')
   return res.json()
 }
+
+export type ConfigKey =
+  | 'TZ' | 'LLM_PROVIDER' | 'OPENAI_API_KEY' | 'OPENAI_MODEL' | 'ANTHROPIC_API_KEY'
+  | 'SMTP_USER' | 'SMTP_PASS' | 'SMTP_HOST' | 'SMTP_PORT' | 'IMAP_HOST' | 'IMAP_PORT'
+  | 'EMAIL_DIGEST_ENABLED' | 'SMTP_TO' | 'SMTP_FROM'
+  | 'EMAIL_IMPORT_ENABLED' | 'EMAIL_IMPORT_ADDRESS' | 'EMAIL_IMPORT_ALLOWED_SENDERS'
+  | 'WALLPAPER_ENABLED'
+
+/** value is null for secrets (only `set` is reported). source: saved here, from .env.local, or not set. */
+export interface ConfigField { value: string | null; set: boolean; source: 'app' | 'env' | 'unset' }
+export interface AppConfig {
+  fields: Record<ConfigKey, ConfigField>
+  defaultTimeZone: string
+  status: {
+    ai: { provider: 'openai' | 'anthropic'; configured: boolean }
+    digest: { state: 'off' | 'on' | 'error'; message: string | null }
+    emailImport: { enabled: boolean; lastCheck: { at: string; ok: boolean; error: string | null } | null }
+    wallpaper: { running: boolean }
+  }
+}
+
+export class ConfigSaveError extends Error {
+  constructor(message: string, readonly fields: Partial<Record<ConfigKey, string>>) { super(message) }
+}
+
+/** GET /api/config: Settings > Setup values and service status. */
+export async function getConfig(): Promise<AppConfig> {
+  const res = await fetch('/api/config')
+  if (!res.ok) throw new Error('Failed to load setup')
+  return res.json()
+}
+
+/** PUT /api/config: save some values ('' = not set). Throws ConfigSaveError with per-field messages. */
+export async function saveConfig(values: Partial<Record<ConfigKey, string>>): Promise<AppConfig> {
+  const res = await fetch('/api/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new ConfigSaveError(body?.error?.message ?? 'Could not save. Try again.', body?.error?.fields ?? {})
+  }
+  return res.json()
+}

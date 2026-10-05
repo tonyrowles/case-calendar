@@ -142,7 +142,7 @@ function Start-Server {
   $psi.WorkingDirectory = $ProjectRoot
   $psi.UseShellExecute = $false
   $psi.CreateNoWindow = $true
-  $psi.EnvironmentVariables['TZ'] = 'America/Los_Angeles'
+  # Time zone: the computer's own unless changed in Settings > Setup (no TZ forced here)
   $psi.EnvironmentVariables['NODE_ENV'] = 'production'
   $script:server = [System.Diagnostics.Process]::Start($psi)
   $script:expectStop = $false

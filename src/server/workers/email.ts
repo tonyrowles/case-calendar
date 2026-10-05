@@ -49,6 +49,24 @@ export function setSendMailImpl(fn: SendMailFn): void {
 let cronTask: ScheduledTask | null = null
 let transporter: nodemailer.Transporter | null = null
 
+/** For Settings > Setup: is the daily digest scheduled, and if not, why. */
+export type DigestStatus = { state: 'off' | 'on' | 'error'; message: string | null }
+let status: DigestStatus = { state: 'off', message: null }
+export function emailDigestStatus(): DigestStatus { return status }
+
+export function stopEmailWorker(): void {
+  cronTask?.stop()
+  cronTask = null
+  transporter = null
+  status = { state: 'off', message: null }
+}
+
+/** Pick up changed settings (account, recipients, time zone): stop, then start again. */
+export async function restartEmailWorker(): Promise<void> {
+  stopEmailWorker()
+  await startEmailWorker()
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Required environment variables
 // ─────────────────────────────────────────────────────────────────────────────
@@ -167,13 +185,14 @@ export async function startEmailWorker(): Promise<void> {
 
   // 3. Graceful no-op when not configured (EMAIL-02: env-only config)
   if (process.env.EMAIL_DIGEST_ENABLED !== 'true') {
-    logger.info('email digest disabled (set EMAIL_DIGEST_ENABLED=true in .env.local)')
+    logger.info('email digest disabled (turn it on in Settings > Setup)')
     return
   }
 
   const missing = REQUIRED_ENV.filter((k) => !process.env[k])
   if (missing.length > 0) {
     logger.info({ missing }, 'email digest disabled (missing env vars)')
+    status = { state: 'error', message: 'Add your email account in Settings > Setup to send the digest.' }
     return
   }
 
@@ -187,7 +206,8 @@ export async function startEmailWorker(): Promise<void> {
     logger.info('email: SMTP connection verified')
   } catch (err) {
     logger.warn({ err }, 'email: SMTP verify failed — digest disabled until config is fixed')
-    return  // No cron scheduled — operator must fix config and restart
+    status = { state: 'error', message: `Could not sign in to the mail server: ${err instanceof Error ? err.message : String(err)}` }
+    return  // No cron scheduled — fixing the settings restarts the worker
   }
 
   // 6. Schedule daily 7:00 AM digest (EMAIL-01)
@@ -210,6 +230,7 @@ export async function startEmailWorker(): Promise<void> {
     }
   )
 
+  status = { state: 'on', message: null }
   logger.info(
     { schedule: '0 7 * * *', tz: process.env.TZ ?? 'America/Los_Angeles' },
     'email digest worker started'
@@ -238,6 +259,7 @@ export function __resetForTests(): void {
     cronTask = null
   }
   transporter = null
+  status = { state: 'off', message: null }
   // Restore throwing default so tests that forget to call setSendMailImpl fail loudly
   sendMailImpl = async () => {
     throw new Error('sendMailImpl not set — startEmailWorker must be called before sendDigest')

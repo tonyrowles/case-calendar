@@ -30,7 +30,7 @@ export function llmConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 export const LLM_UNCONFIGURED_MESSAGE =
-  'Set OPENAI_API_KEY (or ANTHROPIC_API_KEY) in .env.local to enable reading deadlines from text.'
+  'Add an OpenAI or Anthropic API key in Settings > Setup to enable reading deadlines from text.'
 
 export function openaiModel(env: NodeJS.ProcessEnv = process.env): string {
   return env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL

@@ -95,7 +95,7 @@ export function InboxDialog({ open, onOpenChange }: {
               ? `From ${selected.fromAddress}, ${when(selected.receivedAt)}. Review the deadlines found in this email, then add them.`
               : inbox?.enabled
                 ? <>Email an order or scheduling notice to <strong>{inbox.address}</strong>. Deadlines found in it wait here for your review; nothing is added until you confirm.</>
-                : 'Email import is off. Set EMAIL_IMPORT_ENABLED=true and EMAIL_IMPORT_ADDRESS in .env.local (see docs/DEPLOYMENT.md), then restart the server.'}
+                : 'Email import is off. Turn it on in Settings > Setup.'}
           </DialogDescription>
         </DialogHeader>
 

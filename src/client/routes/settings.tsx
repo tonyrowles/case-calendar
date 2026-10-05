@@ -8,6 +8,7 @@ import { SubscribeIcalItem } from '@/client/components/settings/SubscribeIcalIte
 import { CaseList } from '@/client/components/settings/CaseList.js'
 import { WallpaperSettings } from '@/client/components/settings/WallpaperSettings.js'
 import { ScreenSettings } from '@/client/components/settings/ScreenSettings.js'
+import { SetupSettings } from '@/client/components/settings/SetupSettings.js'
 
 export function SettingsPage() {
   const typesQuery = useQuery({
@@ -27,6 +28,14 @@ export function SettingsPage() {
       <h2 className="text-2xl font-semibold mb-8">Settings</h2>
 
       <section>
+        <h3 className="text-xl font-semibold mb-1">Setup</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Time zone, AI, email and wallpaper. Changes apply right away; no restart needed.
+        </p>
+        <SetupSettings />
+      </section>
+
+      <section className="mt-8">
         <h3 className="text-xl font-semibold mb-1">Cases</h3>
         <p className="text-sm text-muted-foreground mb-4">
           Each case gets its own color automatically; pick one to change it. Rename a case to fix
