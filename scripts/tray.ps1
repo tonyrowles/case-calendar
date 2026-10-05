@@ -226,7 +226,8 @@ function Test-Server {
 # -Open: open the browser once the server answers (checked on the timer)
 function Test-OpenWhenUp {
   if (-not $script:openWhenUp) { return }
-  if ((Get-PortOwners).Count -gt 0) {
+  # @(): under StrictMode a single result is a scalar with no .Count
+  if (@(Get-PortOwners).Count -gt 0) {
     $script:openWhenUp = $false
     Start-Process ($AppUrl + $OpenPath)
   }
@@ -417,15 +418,14 @@ $notify.add_DoubleClick({ Start-Process $AppUrl })
 # --- main loop ---------------------------------------------------------------
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 2000
+# Each step guarded separately: one failing step must not stop the watchdog or update checks
 $timer.add_Tick({
+  try { Test-OpenWhenUp } catch { Write-TrayLog "timer error (open): $_" }
+  try { Test-Update } catch { Write-TrayLog "timer error (update): $_" }
+  try { Test-Server } catch { Write-TrayLog "timer error (watchdog): $_" }
   try {
-    Test-OpenWhenUp
-    Test-Update
-    Test-Server
     if (-not $script:updating -and (Get-Date) -ge $script:nextUpdateCheck) { Update-Check }
-  } catch {
-    Write-TrayLog "timer error: $_"
-  }
+  } catch { Write-TrayLog "timer error (update check): $_" }
 })
 
 $layout = 'checkout'
