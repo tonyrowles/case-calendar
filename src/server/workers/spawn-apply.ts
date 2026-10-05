@@ -13,13 +13,15 @@ const POWERSHELL_BIN = process.env.WALLPAPER_POWERSHELL_BIN ?? 'powershell.exe'
  * matches CONTEXT.md decision:
  *   powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <ps1> -Path <png>
  */
-export function buildPowerShellArgs(absolutePngPath: string): string[] {
+export function buildPowerShellArgs(absolutePngPath: string, monitorId: string | null = null): string[] {
   return [
     '-NoProfile',
     '-NonInteractive',
     '-ExecutionPolicy', 'Bypass',
     '-File', PS1_PATH,
     '-Path', absolutePngPath,
+    // Only the chosen monitor's wallpaper changes; others keep theirs
+    ...(monitorId ? ['-MonitorId', monitorId] : []),
   ]
 }
 
@@ -42,8 +44,8 @@ export function __resetSpawnForTests(): void { spawnImpl = realSpawn }
  * rejects on non-zero exit with stderr contents + exit code attached.
  * Plan 01's wallpaper.ts catches the rejection at warn level (worker does not crash).
  */
-export async function spawnPowerShellApply(absolutePngPath: string): Promise<void> {
-  const args = buildPowerShellArgs(absolutePngPath)
+export async function spawnPowerShellApply(absolutePngPath: string, monitorId: string | null = null): Promise<void> {
+  const args = buildPowerShellArgs(absolutePngPath, monitorId)
   logger.info({ ps1: PS1_PATH, png: absolutePngPath }, 'wallpaper: spawning powershell apply')
 
   return new Promise<void>((resolve, reject) => {

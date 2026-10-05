@@ -13,15 +13,15 @@ import { readdir, stat, unlink } from 'node:fs/promises'
 import cron, { type ScheduledTask } from 'node-cron'
 import { chromium, type Browser, type BrowserContext } from 'playwright'
 import { logger } from '../logger.js'
-import { onMutation } from '../queries.js'
+import { getSetting, onMutation } from '../queries.js'
 import { spawnPowerShellApply } from './spawn-apply.js'
+import { FALLBACK_TARGET, listMonitors, pickTarget, type WallpaperTarget } from './monitors.js'
 
 // --- Constants ---
 
 const DEBOUNCE_MS = 10_000
 /** SAFE-07: explicit loopback — never 0.0.0.0; bypasses Tailscale CORS checks */
 const WALLPAPER_URL_BASE = 'http://127.0.0.1:3747/wallpaper'
-const VIEWPORT = { width: 7680, height: 2160 } as const
 const KEEP_COUNT = 10
 const CRON_EXPR = '*/30 * * * *'
 /** FullCalendar paint settle (Pitfall 2) */
@@ -30,7 +30,8 @@ export const DATA_DIR = path.resolve('data')
 
 // --- Dependency-injection seam (Plan 03 overrides via setApplyWallpaper) ---
 
-export type ApplyWallpaperFn = (absolutePath: string) => Promise<void>
+/** monitorId: apply to that monitor only; null = every monitor */
+export type ApplyWallpaperFn = (absolutePath: string, monitorId: string | null) => Promise<void>
 
 // Module-level apply callback; default no-op; Plan 03 replaces at startup
 let applyWallpaperImpl: ApplyWallpaperFn = async () => {
@@ -59,8 +60,31 @@ function buildTimestampFilename(): string {
 
 // --- Helper: build the wallpaper URL with cache-bust param ---
 
-function buildWallpaperUrl(): string {
-  return `${WALLPAPER_URL_BASE}?t=${Date.now()}`
+function buildWallpaperUrl(target: WallpaperTarget): string {
+  return `${WALLPAPER_URL_BASE}?w=${target.logicalWidth}&h=${target.logicalHeight}&t=${Date.now()}`
+}
+
+/** The monitor to render for (Settings > Wallpaper > monitor; default primary). */
+async function currentTarget(): Promise<WallpaperTarget> {
+  const chosen = getSetting('wallpaperMonitor') || 'primary'
+  return pickTarget(await listMonitors(), chosen)
+}
+
+let contextKey = ''
+function targetKey(t: WallpaperTarget): string {
+  return `${t.logicalWidth}x${t.logicalHeight}@${t.deviceScaleFactor}`
+}
+/** (Re)create the browser context when the target size or scaling changes. */
+async function ensureContext(target: WallpaperTarget): Promise<void> {
+  const key = targetKey(target)
+  if (context !== null && key === contextKey) return
+  if (browser === null) await launchBrowser()
+  await context?.close().catch(() => {})
+  context = await browser!.newContext({
+    viewport: { width: target.logicalWidth, height: target.logicalHeight },
+    deviceScaleFactor: target.deviceScaleFactor,
+  })
+  contextKey = key
 }
 
 // --- Browser lifecycle ---
@@ -73,9 +97,10 @@ async function launchBrowser(): Promise<void> {
     args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
   })
   context = await browser.newContext({
-    viewport: VIEWPORT,
-    deviceScaleFactor: 1,
+    viewport: { width: FALLBACK_TARGET.logicalWidth, height: FALLBACK_TARGET.logicalHeight },
+    deviceScaleFactor: FALLBACK_TARGET.deviceScaleFactor,
   })
+  contextKey = targetKey(FALLBACK_TARGET)
 }
 
 async function closeBrowser(): Promise<void> {
@@ -153,9 +178,11 @@ export async function generateAndApplyWallpaper(): Promise<void> {
     const filename = `wallpaper-${buildTimestampFilename()}.png`
     const absolutePath = path.join(DATA_DIR, filename)
 
-    const wallpaperUrl = buildWallpaperUrl()
+    const target = await currentTarget()
+    await ensureContext(target)
+    const wallpaperUrl = buildWallpaperUrl(target)
     logger.info(
-      { url: wallpaperUrl, path: absolutePath },
+      { url: wallpaperUrl, path: absolutePath, monitorId: target.monitorId, scale: target.deviceScaleFactor },
       'wallpaper: generating screenshot'
     )
 
@@ -164,7 +191,7 @@ export async function generateAndApplyWallpaper(): Promise<void> {
 
     if (process.platform === 'win32') {
       try {
-        await applyWallpaperImpl(absolutePath)
+        await applyWallpaperImpl(absolutePath, target.monitorId)
       } catch (err) {
         logger.warn(
           { err, path: absolutePath },
