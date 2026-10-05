@@ -51,7 +51,7 @@ PIN-only or Microsoft Account sign-in (no local password)? Skip NSSM and use the
 - **Node.js 22 LTS** (`node --version`) -- nodejs.org.
 - **NSSM 2.24+** (`nssm version`) -- nssm.cc/download; place `nssm.exe` on `PATH`.
 - **Admin PowerShell** -- right-click -> **Run as Administrator**. Fallback: `npm run start` in a normal terminal (no service, no auto-restart).
-- **Windows timezone = `Pacific Standard Time`** (`[System.TimeZoneInfo]::Local.Id`). If different, the install script warns and prompts. All `today` calculations and backup retention use this timezone.
+- **Time zone**: the computer's own by default; change it in **Settings > Setup**. It decides what `today` is for the list, the wallpaper and the digest.
 
 ---
 
@@ -120,7 +120,7 @@ Verify with the Verify section above.
 
 **Service won't start / restart loop** -- usually `dist\server\src\server\index.js` missing/corrupted. `Get-Content C:\apps\case-calendar\logs\case-calendar.err -Tail 30`. If `Cannot find module`, `npm run build; nssm restart CaseCalendar`. NSSM restart-loops on non-zero Node exit; 10MB log rotation (`AppRotateBytes`) prevents disk exhaustion.
 
-**Bound to wrong port/address** -- if `netstat -ano | findstr 3747` shows `0.0.0.0:3747`, SAFE-07 regressed. `hostname` in `src/server/index.ts` must be `'127.0.0.1'`. Reproduce: `cross-env TZ=America/Los_Angeles npm test -- tests/safe-07-bind-loopback.test.ts`.
+**Bound to wrong port/address** -- if `netstat -ano | findstr 3747` shows `0.0.0.0:3747`, SAFE-07 regressed. `hostname` in `src/server/index.ts` must be `'127.0.0.1'`. Reproduce: `npm test -- tests/safe-07-bind-loopback.test.ts`.
 
 **Logs not appearing** -- confirm `logs\` exists and the service account (LocalSystem by default) has write permission. Install under `C:\apps\`, not `C:\Program Files\` (UAC-restricted write).
 
@@ -170,7 +170,7 @@ Copy the tailnet hostname (e.g. `lawyer-laptop.tail-scale.ts.net`) -- hostname o
 Browsers send `Origin: http://<your-tailnet-hostname>`; the CORS allowlist must include it:
 
 ```powershell
-nssm set CaseCalendar AppEnvironmentExtra "TZ=America/Los_Angeles" "NODE_ENV=production" "TAILSCALE_HOSTNAME=lawyer-laptop.tail-scale.ts.net"
+nssm set CaseCalendar AppEnvironmentExtra "NODE_ENV=production" "TAILSCALE_HOSTNAME=lawyer-laptop.tail-scale.ts.net"
 nssm restart CaseCalendar
 ```
 
@@ -190,7 +190,7 @@ From the **client device**: `http://<your-tailnet-hostname>` loads; `/api/identi
 | Phone can't reach right after host reboot, works 30s later | tailscaled reconnecting WireGuard (5-30s); loopback up immediately -- wait 30s |
 | `/api/identity` returns `{"user":"local"}` from tailnet device | Hitting direct loopback OR device is tagged (no `Tailscale-User-Login`) -- use the tailnet hostname from a user-account device |
 
-**Stopping Tailscale later:** `nssm set CaseCalendar AppEnvironmentExtra "TZ=America/Los_Angeles" "NODE_ENV=production"; nssm restart CaseCalendar; tailscale serve off`.
+**Stopping Tailscale later:** `nssm set CaseCalendar AppEnvironmentExtra "NODE_ENV=production"; nssm restart CaseCalendar; tailscale serve off`.
 
 *Hono bind stays `127.0.0.1:3747`. Tailscale Serve is the only inbound network surface for tailnet traffic.*
 
@@ -198,7 +198,7 @@ From the **client device**: `http://<your-tailnet-hostname>` loads; `/api/identi
 
 ## Desktop Wallpaper (Phase 9)
 
-Wallpaper auto-regenerates from the deadline view every 30 minutes and within ~10s of any deadline change. 7680x2160 screenshots via Playwright headless Chromium, applied via the IDesktopWallpaper COM interface.
+Wallpaper auto-regenerates from the deadline view every 30 minutes and within ~10s of any deadline change. Screenshots at the chosen monitor's resolution via Playwright (its Chromium, or the Edge built into Windows), applied via the IDesktopWallpaper COM interface.
 
 ### Overview
 
@@ -302,12 +302,7 @@ if (process.env.WALLPAPER_ENABLED === 'true') {
 
 ### DPI Scaling
 
-For the sharpest wallpaper text on the 57" Odyssey Neo G9 (7680x2160 native), set Windows display scaling to **100%**.
-
-- At **100% scaling**: 1 logical pixel = 1 physical pixel. Playwright's `deviceScaleFactor: 1` matches Windows exactly. Text renders at full native resolution with no resampling.
-- At **125% scaling**: Windows considers the logical desktop to be 6144x1728 (7680/1.25). It downsamples the 7680x2160 PNG to fill the logical desktop -- no distortion, no black bars, edge-to-edge display. However, text appears approximately 20% smaller relative to screen height.
-
-This is a cosmetic preference, not a correctness issue. The PNG will display edge-to-edge at either setting. If you prefer larger text at 125% scaling, increase the CSS font sizes in `src/client/routes/wallpaper.tsx` by ~25%.
+The wallpaper follows Windows display scaling automatically: it is laid out at the monitor's logical size (physical pixels / scaling) and rendered at the scaling factor, so the PNG is the monitor's exact physical resolution and text is as large as the rest of Windows. Choose the monitor and the desktop-icon side in **Settings > Wallpaper**; the layout adapts to any size (side-by-side on 2:1 and wider screens, calendar over the list otherwise).
 
 ---
 
@@ -330,7 +325,7 @@ npm run wallpaper:once
 
 **Requirement:** The Hono server must be running (via NSSM or `npm run dev:server`) on `127.0.0.1:3747` -- the worker fetches the `/wallpaper` route over loopback.
 
-**What it does:** Launches Playwright, takes one screenshot at 7680x2160, prunes old files (keeps newest 10), applies the PNG on Windows via `wallpaper-set.ps1`, then exits.
+**What it does:** Launches Playwright, takes one screenshot at the chosen monitor's resolution, prunes old files (keeps newest 10), applies the PNG on Windows via `wallpaper-set.ps1`, then exits.
 
 ---
 
@@ -476,7 +471,7 @@ How it behaves:
 
 ## SAFE Checklist Summary
 
-Each SAFE has an automated proof. Run `cross-env TZ=America/Los_Angeles npm test`.
+Each SAFE has an automated proof. Run `npm test`.
 
 | ID | Description | Proof |
 |----|-------------|-------|

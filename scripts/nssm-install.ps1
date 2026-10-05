@@ -32,19 +32,6 @@ function Invoke-Nssm {
 }
 
 # ---------------------------------------------------------------------------
-# Pre-flight check 1: Windows system timezone must be Pacific Standard Time
-# ---------------------------------------------------------------------------
-$tz = [System.TimeZoneInfo]::Local.Id
-if ($tz -ne "Pacific Standard Time") {
-  Write-Warning "Windows TZ is '$tz'; expected 'Pacific Standard Time'. Date calculations and backups will use the wrong 'today'."
-  $confirmation = Read-Host "Continue anyway? (y/N)"
-  if ($confirmation -ne "y") {
-    Write-Host "Aborted. Set the system timezone to 'Pacific Standard Time' or re-run with y to override."
-    exit 1
-  }
-}
-
-# ---------------------------------------------------------------------------
 # Pre-flight check 2: NSSM must be on PATH
 # ---------------------------------------------------------------------------
 if (-not (Get-Command nssm -ErrorAction SilentlyContinue)) {
@@ -138,7 +125,8 @@ New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
 
 Invoke-Nssm install $ServiceName $nodeExe $serverJs
 Invoke-Nssm set $ServiceName AppDirectory $InstallDir
-Invoke-Nssm set $ServiceName AppEnvironmentExtra "TZ=America/Los_Angeles" "NODE_ENV=production"
+# Time zone: the computer's own unless changed in Settings > Setup
+Invoke-Nssm set $ServiceName AppEnvironmentExtra "NODE_ENV=production"
 Invoke-Nssm set $ServiceName AppStdout (Join-Path $logsDir "case-calendar.log")
 Invoke-Nssm set $ServiceName AppStderr (Join-Path $logsDir "case-calendar.err")
 Invoke-Nssm set $ServiceName AppRotateFiles 1

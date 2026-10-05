@@ -90,7 +90,7 @@ export function WallpaperSettings(): React.JSX.Element {
         <p className="text-sm font-semibold">Glass background image</p>
         <p className="text-xs text-muted-foreground mb-3">
           Optional. Used by the Glass theme instead of the built-in gradient; the calendar is
-          frosted over it. JPEG, PNG or WebP up to 25 MB; a 7680×2160 image fits the G9 exactly.
+          frosted over it. JPEG, PNG or WebP up to 25 MB; an image the size of your screen fits exactly.
           Stored on this computer only.
         </p>
         <div className="flex items-center gap-3">

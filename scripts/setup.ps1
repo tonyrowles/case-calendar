@@ -126,16 +126,6 @@ if ($hasTailscale) {
   $SkipTailscale = $true
 }
 
-# Windows timezone
-$tz = [System.TimeZoneInfo]::Local.Id
-if ($tz -ne "Pacific Standard Time") {
-  Write-Warning "System timezone is '$tz'; Case Calendar's date math assumes 'Pacific Standard Time'."
-  if (-not (Confirm-Continue "Continue anyway?" $false)) {
-    Write-Host "Aborted. Change Windows timezone in Settings > Time & language, then re-run."
-    exit 1
-  }
-}
-
 # ---------------------------------------------------------------------------
 # Step 2: npm install
 # ---------------------------------------------------------------------------

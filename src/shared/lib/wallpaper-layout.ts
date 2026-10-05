@@ -3,7 +3,7 @@
 // and a 7680x2160 ultrawide all get proportionate text and a layout that fits.
 //
 // Calibration: at a logical height of 2160 the sizes below are exactly the original
-// 57" G9 design (scale 1). Wide screens (>= 2:1) put the list beside the calendar;
+// 7680x2160 (32:9) design (scale 1). Wide screens (>= 2:1) put the list beside the calendar;
 // narrower and portrait screens stack the list under the calendar in columns.
 
 import type { Bucket } from './buckets.js'

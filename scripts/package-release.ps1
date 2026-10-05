@@ -19,7 +19,8 @@
 param(
   [switch]$SkipBuild,
   [switch]$SkipInstaller,
-  [string]$Repo = 'tonyrowles/case-calendar'
+  # GitHub owner/name that installed copies check for updates; default: this build's repo
+  [string]$Repo = ''
 )
 
 Set-StrictMode -Version Latest
@@ -38,6 +39,13 @@ function Invoke-Checked([string]$label, [scriptblock]$cmd) {
 }
 
 $pkg = Get-Content (Join-Path $Root 'package.json') -Raw | ConvertFrom-Json
+if (-not $Repo) { $Repo = $env:GITHUB_REPOSITORY }
+if (-not $Repo) {
+  $origin = (git remote get-url origin 2>$null)
+  if ($origin -match 'github\.com[:/]([^/]+/[^/]+?)(\.git)?$') { $Repo = $Matches[1] }
+}
+if (-not $Repo) { throw 'Could not tell which GitHub repo updates come from; pass -Repo owner/name' }
+Write-Host "Updates from github.com/$Repo"
 $Version = $pkg.version
 Write-Host "Case Calendar $Version"
 

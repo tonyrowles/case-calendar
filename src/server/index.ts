@@ -1,7 +1,7 @@
 // DATA-06: time zone. Default is the computer's own; Settings > Setup can override it
 // (applyStoredConfig below sets process.env.TZ, which Node honors at runtime). Imports are
 // evaluated first, so db.ts's startup backup is named in the environment/computer zone.
-// Tests pin TZ=America/Los_Angeles via the npm test scripts.
+// Tests pin TZ=America/Los_Angeles via the npm test scripts (deterministic dates).
 
 import './load-env.js'                    // must stay first: loads .env.local before any module reads process.env
 import { serve } from '@hono/node-server'

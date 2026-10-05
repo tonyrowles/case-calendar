@@ -69,7 +69,7 @@ describe('/api/settings', () => {
 
   it('ST7: GET /api/displays reports the render target (fallback size when no monitors are detected)', async () => {
     const res = await (await app.request('/api/displays')).json()
-    expect(res.target).toMatchObject({ logicalWidth: 7680, logicalHeight: 2160, deviceScaleFactor: 1, monitorId: null })
+    expect(res.target).toMatchObject({ logicalWidth: 1920, logicalHeight: 1080, deviceScaleFactor: 1, monitorId: null })
   })
 
   it('ST4: an unrecognized stored value falls back to the default theme', async () => {
