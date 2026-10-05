@@ -1,0 +1,120 @@
+# Build the Windows installer (CaseCalendarSetup-<version>.exe), install it on a clean
+# runner and smoke-test it, then:
+#   - on a version tag (v1.2.3, must match package.json): publish a GitHub Release with
+#     the installer attached (installed copies check releases/latest for updates)
+#   - on a manual run (Actions > Release > Run workflow), or a PR that changes the
+#     installer or the tray: keep the installer as a build artifact only (for testing)
+#
+# Cut a release:  npm version minor   (bumps package.json, commits, tags vX.Y.Z)
+#                 git push --follow-tags
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - installer/**
+      - scripts/package-release.ps1
+      - scripts/tray.ps1
+      - scripts/install-update.ps1
+      - scripts/stop.ps1
+      - src/server/paths.ts
+      - src/server/schema-init.ts
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ("v$version" -ne '${{ github.ref_name }}') { throw "Tag ${{ github.ref_name }} does not match package.json version $version" }
+
+      - name: Install (exactly the lockfile)
+        run: npm ci --no-audit --no-fund
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      - name: Build installer
+        shell: pwsh
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/package-release.ps1
+
+      - name: Smoke test (install, run, uninstall)
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $setup = "release\CaseCalendarSetup-$version.exe"
+          $dir = Join-Path $env:RUNNER_TEMP 'CaseCalendar'
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOLAUNCH=1', "/DIR=$dir", "/LOG=$env:RUNNER_TEMP\install.log" -PassThru -Wait
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\install.log" -Tail 40; throw "installer exited $($p.ExitCode)" }
+
+          $data = Join-Path $env:RUNNER_TEMP 'cc-data'
+          $env:NODE_ENV = 'production'; $env:CASE_CALENDAR_DATA = $data
+          $server = Start-Process "$dir\node\node.exe" -ArgumentList 'server.mjs' -WorkingDirectory "$dir\app" -PassThru -NoNewWindow -RedirectStandardOutput "$env:RUNNER_TEMP\server.log" -RedirectStandardError "$env:RUNNER_TEMP\server.err"
+          $up = $false
+          for ($i = 0; $i -lt 60; $i++) { try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:3747/api/settings -TimeoutSec 2 | Out-Null; $up = $true; break } catch { Start-Sleep -Milliseconds 500 } }
+          try {
+            if (-not $up) { throw 'server did not start' }
+            if ((Invoke-WebRequest -UseBasicParsing http://127.0.0.1:3747/).Content -notmatch '/assets/index-') { throw 'web app not served' }
+            if (@(Invoke-RestMethod http://127.0.0.1:3747/api/deadline-types).Count -lt 1) { throw 'deadline types not seeded' }
+            $body = @{ date = '2026-10-20'; caseLabel = 'Smoke v. Test'; typeId = 1; description = 'Smoke deadline' } | ConvertTo-Json
+            $created = Invoke-RestMethod -Method Post http://127.0.0.1:3747/api/deadlines -Body $body -ContentType 'application/json'
+            if (-not $created.id) { throw 'could not create a deadline' }
+            if (-not (Test-Path "$data\data\deadlines.db")) { throw 'database not in CASE_CALENDAR_DATA' }
+            Write-Host 'Installed copy works'
+          } catch {
+            Get-Content "$env:RUNNER_TEMP\server.log", "$env:RUNNER_TEMP\server.err" -ErrorAction SilentlyContinue | Select-Object -Last 40
+            throw
+          } finally {
+            & taskkill.exe /PID $server.Id /T /F | Out-Null
+          }
+
+          $u = Start-Process "$dir\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -PassThru -Wait
+          Start-Sleep -Seconds 3
+          if (Test-Path "$dir\app\dist") { throw 'uninstall left program files behind' }
+          if (-not (Test-Path "$data\data\deadlines.db")) { throw 'uninstall removed user data' }
+          Write-Host 'Uninstall OK (data kept)'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CaseCalendarSetup
+          path: release/CaseCalendarSetup-*.exe
+          if-no-files-found: error
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          gh release create '${{ github.ref_name }}' "release\CaseCalendarSetup-$version.exe" --title "Case Calendar $version" --generate-notes

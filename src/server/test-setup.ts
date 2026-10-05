@@ -6,73 +6,10 @@
  * need migration files. CREATE TABLE IF NOT EXISTS makes this idempotent.
  */
 import { sqlite } from './db.js'
+import { ensureSchema } from './schema-init.js'
 
-// Create deadline_types table
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS deadline_types (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    name      TEXT    NOT NULL UNIQUE,
-    color     TEXT    NOT NULL,
-    createdAt TEXT    NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  )
-`)
-
-// Create deadlines table
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS deadlines (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    date        TEXT    NOT NULL,
-    caseLabel   TEXT    NOT NULL,
-    typeId      INTEGER NOT NULL REFERENCES deadline_types(id),
-    description TEXT,
-    completedAt TEXT,
-    createdAt   TEXT    NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    updatedAt   TEXT    NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  )
-`)
-
-// Create case_colors table (user-chosen case color overrides)
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS case_colors (
-    caseKey   TEXT PRIMARY KEY NOT NULL,
-    caseLabel TEXT NOT NULL,
-    color     TEXT NOT NULL,
-    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  )
-`)
-
-// Create archived_cases table (closed cases hidden from pickers)
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS archived_cases (
-    caseKey    TEXT PRIMARY KEY NOT NULL,
-    caseLabel  TEXT NOT NULL,
-    archivedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  )
-`)
-
-// Create email_imports table (emailed orders waiting for review)
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS email_imports (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    messageId   TEXT NOT NULL UNIQUE,
-    fromAddress TEXT NOT NULL,
-    subject     TEXT NOT NULL,
-    receivedAt  TEXT NOT NULL,
-    status      TEXT NOT NULL,
-    reason      TEXT,
-    proposals   TEXT,
-    createdAt   TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  )
-`)
-
-// Create app_settings table (key/value app settings, e.g. wallpaperTheme)
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS app_settings (
-    key       TEXT PRIMARY KEY NOT NULL,
-    value     TEXT NOT NULL,
-    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-  )
-`)
+// Same schema the server creates on first run (db.ts already ran it; harmless to repeat)
+ensureSchema(sqlite)
 
 // Install the updatedAt trigger (idempotent: CREATE TRIGGER IF NOT EXISTS)
 sqlite.exec(`

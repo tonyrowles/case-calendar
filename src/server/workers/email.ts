@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import cron, { type ScheduledTask } from 'node-cron'
 import nodemailer from 'nodemailer'
 import dotenv from 'dotenv'
+import { ENV_FILE } from '../paths.js'
 import { logger } from '../logger.js'
 import { getAllDeadlines, getAllDeadlineTypes } from '../queries.js'
 import { toISODateString } from '../../shared/lib/date.js'
@@ -162,7 +163,7 @@ export async function sendDigest(): Promise<void> {
 export async function startEmailWorker(): Promise<void> {
   // 1. Load .env.local FIRST — before any process.env read (Pitfall 3: dotenv after env read)
   // dotenv does NOT override vars already set in the OS environment (NSSM sets TZ etc.)
-  dotenv.config({ path: '.env.local' })
+  dotenv.config({ path: ENV_FILE })
 
   // 2. --once mode: manual debug/test trigger — bypasses EMAIL_DIGEST_ENABLED gate.
   // Matches wallpaper.ts pattern: manual trigger checks required vars then sends immediately.
@@ -245,7 +246,9 @@ export async function startEmailWorker(): Promise<void> {
 // import.meta.url resolves to this file's path which matches process.argv[1].
 // When email.ts is imported by index.ts, import.meta.url !== process.argv[1]
 // and this guard is inert (no double-start).
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// Also requires the script name to be this file: in the single-file release bundle
+// (server.mjs) import.meta.url IS the entry point, and the guard must stay inert.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1] && /email\.[jt]s$/.test(process.argv[1])) {
   void startEmailWorker()
 }
 

@@ -4,6 +4,21 @@ A self-hosted, single-user webapp for a practicing lawyer to track every active 
 
 ---
 
+## Install (Windows 10/11)
+
+1. Download `CaseCalendarSetup-<version>.exe` from the [latest release](../../releases/latest) and run it.
+   No administrator rights, Node.js or git needed. (Windows may warn that the app is from an
+   unknown publisher: choose **More info > Run anyway**.)
+2. Your browser opens to **Settings > Setup**: pick your time zone, optionally add an AI key and
+   email account, and turn on the desktop wallpaper.
+3. Case Calendar runs from the system tray and starts when you sign in. Updates appear in the
+   tray menu (**Install update**).
+
+Your deadlines and settings live in `%LOCALAPPDATA%\CaseCalendar` and are kept across updates
+and uninstall. Building the installer: see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md#installer-and-releases).
+
+---
+
 ## Quick Start (Development)
 
 ```bash
@@ -16,7 +31,7 @@ npm run dev
 
 ## Self-host on Windows
 
-Production deployment model: run `npm run build` once, then either `npm run start` for an ad-hoc foreground process or install as a persistent Windows service with NSSM for always-on operation.
+From a git checkout (developers): run `npm run build` once, then either `npm run start` for an ad-hoc foreground process or install as a persistent Windows service with NSSM for always-on operation.
 
 See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for the cold-start Windows runbook — prerequisites, NSSM install, post-reboot verification, update procedure, and uninstall.
 
