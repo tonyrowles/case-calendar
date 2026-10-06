@@ -93,24 +93,38 @@ describe('App filter integration (VIEW-05, FILT-04, FILT-05, VIEW-08)', () => {
     cleanup()
   })
 
-  it('I1: at default URL (/), list view shows all deadlines (range=all default)', async () => {
+  it('I1: at default URL (/), the list starts at today: the 4 upcoming deadlines, not the 2 past ones', async () => {
     renderApp('/', qc => {
       qc.setQueryData(['deadlines'], deadlineFixtures)
       qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
       qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
     })
 
-    // Default: range=all -- every (non-completed) deadline, bucketed
+    // Default: range=all (Upcoming) -- today onward, bucketed
     await waitFor(() => {
       const rows = screen.queryAllByRole('row')
       expect(rows.length).toBeGreaterThan(0)
     }, { timeout: 3000 })
 
     const rows = screen.getAllByRole('row')
-    expect(rows.length).toBe(6)
+    expect(rows.length).toBe(4)
+    expect(screen.queryByText('Overdue')).toBeNull()
+    expect(screen.queryByRole('checkbox')).toBeNull()
   })
 
-  it('I2: at ?range=all, list view shows all 6 deadlines bucketed', async () => {
+  it('I2: ?range=past shows only the 2 past deadlines', async () => {
+    renderApp('/?range=past', qc => {
+      qc.setQueryData(['deadlines'], deadlineFixtures)
+      qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
+      qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
+    })
+
+    await waitFor(() => {
+      expect(screen.queryAllByRole('row').length).toBe(2)
+    }, { timeout: 3000 })
+  })
+
+  it('I2b: at ?range=all, list view shows the 4 upcoming deadlines bucketed', async () => {
     renderApp('/?range=all', qc => {
       qc.setQueryData(['deadlines'], deadlineFixtures)
       qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
@@ -119,38 +133,38 @@ describe('App filter integration (VIEW-05, FILT-04, FILT-05, VIEW-08)', () => {
 
     await waitFor(() => {
       const rows = screen.queryAllByRole('row')
-      expect(rows.length).toBe(6)
+      expect(rows.length).toBe(4)
     }, { timeout: 3000 })
 
     const rows = screen.getAllByRole('row')
-    expect(rows.length).toBe(6)
+    expect(rows.length).toBe(4)
   })
 
   it('I3: VIEW-05 — applying case filter narrows list view rows', async () => {
-    // Smith has 3 deadlines: id1 (overdue), id2 (overdue), id5 (thisWeek)
+    // Smith has 3 deadlines: id1 (past), id2 (past), id5 (thisWeek); upcoming = id5 only
     renderApp('/?case=Smith%20v.%20Jones&range=all', qc => {
       qc.setQueryData(['deadlines'], deadlineFixtures)
       qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
       qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
     })
 
-    // List view shows 3 Smith rows
+    // List view shows the 1 upcoming Smith row
     await waitFor(() => {
       const rows = screen.queryAllByRole('row')
-      expect(rows.length).toBe(3)
+      expect(rows.length).toBe(1)
     }, { timeout: 3000 })
 
-    expect(screen.getAllByRole('row').length).toBe(3)
+    expect(screen.getAllByRole('row').length).toBe(1)
   })
 
   it('I4: FILT-05 — Clear button removes all filters; list returns to the default (All) view', async () => {
-    renderApp('/?case=Smith%20v.%20Jones&type=1&range=overdue', qc => {
+    renderApp('/?case=Smith%20v.%20Jones&type=1&range=past', qc => {
       qc.setQueryData(['deadlines'], deadlineFixtures)
       qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
       qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
     })
 
-    // Smith + type:Filing + overdue → only id1 (Smith, Filing, overdue)
+    // Smith + type:Filing + past → only id1 (Smith, Filing, past)
     await waitFor(() => {
       const rows = screen.queryAllByRole('row')
       expect(rows.length).toBe(1)
@@ -234,7 +248,7 @@ describe('App filter integration (VIEW-05, FILT-04, FILT-05, VIEW-08)', () => {
     // Wait for list to render
     await waitFor(() => {
       const rows = screen.queryAllByRole('row')
-      expect(rows.length).toBe(6)
+      expect(rows.length).toBe(4)
     }, { timeout: 3000 })
 
     // Click the row for id5 (Smith v. Jones, 2026-05-22) to enter edit mode.

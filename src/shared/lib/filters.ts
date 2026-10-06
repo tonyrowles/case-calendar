@@ -3,14 +3,16 @@
 import { parseLocalDate, toISODateString } from './date.js'
 import { weekBoundaries } from './buckets.js'
 
-export type DateRange = 'overdue' | 'today' | 'this-week' | 'this-month' | 'all'
+/**
+ * The list is a deadline view, not a task list: it starts at today. 'all' = today onward
+ * (shown as "Upcoming"); 'past' = before today, for finding or fixing old entries.
+ */
+export type DateRange = 'past' | 'today' | 'this-week' | 'this-month' | 'all'
 
 export interface Filters {
   case: string | null
   typeIds: number[]
   range: DateRange
-  /** Phase 4 (Plan 03): when true, completed deadlines are included in results */
-  showCompleted: boolean
 }
 
 /**
@@ -43,22 +45,22 @@ function lastDayOfMonth(todayStr: string): string {
  * Intersection semantics (AND): all active predicates must match.
  * - filters.case null/empty → no case constraint
  * - filters.typeIds empty → no type constraint
- * - filters.range 'all' → no date constraint
- * - filters.showCompleted false (default) → excludes completedAt !== null
- *   filters.showCompleted true → includes completed deadlines (CRUD-05/06, Phase 4)
+ * - filters.range: 'past' → before today; every other range starts at today
+ *   ('all' = today onward, 'this-week' = today..Saturday, 'this-month' = today..month end)
  *
  * todayStr is INJECTED — this function never reads the system clock.
  * That makes it trivially testable across DST boundaries by parameterizing todayStr.
- *
- * Phase 4 Plan 03: showCompleted makes the completed filter conditional
- * (RESEARCH Common Pitfall #4 forward-compat fulfilled here).
  */
 export function applyFilters<
-  T extends { date: string; caseLabel: string; typeId: number; completedAt: string | null }
+  T extends { date: string; caseLabel: string; typeId: number }
 >(deadlines: T[], filters: Filters, todayStr: string): T[] {
   return deadlines.filter(d => {
-    // Hide completed deadlines unless showCompleted is true
-    if (!filters.showCompleted && d.completedAt !== null) return false
+    // Past deadlines appear only in the Past view
+    if (filters.range === 'past') {
+      if (!(d.date < todayStr)) return false
+    } else if (d.date < todayStr) {
+      return false
+    }
 
     // Case filter: exact string match (FILT-01 — single value, not substring)
     if (filters.case !== null && d.caseLabel !== filters.case) return false
@@ -68,21 +70,18 @@ export function applyFilters<
 
     // Date range filter (FILT-03)
     switch (filters.range) {
-      case 'overdue':
-        if (!(d.date < todayStr)) return false
+      case 'past':
         break
       case 'today':
         if (d.date !== todayStr) return false
         break
       case 'this-week': {
-        const { thisWeekStart, thisWeekEnd } = weekBoundaries(todayStr)
-        if (d.date < thisWeekStart || d.date > thisWeekEnd) return false
+        const { thisWeekEnd } = weekBoundaries(todayStr)
+        if (d.date > thisWeekEnd) return false
         break
       }
       case 'this-month': {
-        const monthStart = `${todayStr.slice(0, 7)}-01`  // YYYY-MM-01
-        const monthEnd = lastDayOfMonth(todayStr)
-        if (d.date < monthStart || d.date > monthEnd) return false
+        if (d.date > lastDayOfMonth(todayStr)) return false
         break
       }
       case 'all':

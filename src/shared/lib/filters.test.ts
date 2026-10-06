@@ -34,7 +34,7 @@ function makeDeadline(overrides: Partial<Fixture> & { date: string }): Fixture {
   }
 }
 
-const defaultFilters: Filters = { case: null, typeIds: [], range: 'all', showCompleted: false }
+const defaultFilters: Filters = { case: null, typeIds: [], range: 'all' }
 
 describe('applyFilters — FILT-01, FILT-02, FILT-03', () => {
   it('F1: case predicate — filters to deadlines whose caseLabel matches the filter case exactly', () => {
@@ -65,81 +65,61 @@ describe('applyFilters — FILT-01, FILT-02, FILT-03', () => {
     expect(noType).toHaveLength(3)
   })
 
-  it('F3: range=overdue — returns deadlines with date < todayStr AND completedAt===null', () => {
+  it('F3: range=past — returns only deadlines before today, completed or not', () => {
     const deadlines = [
-      makeDeadline({ id: 1, date: '2026-05-20', completedAt: null }),           // overdue
-      makeDeadline({ id: 2, date: '2026-05-20', completedAt: '2026-05-20T12:00:00' }), // completed — excluded
-      makeDeadline({ id: 3, date: TODAY }),                                     // today — not overdue
-      makeDeadline({ id: 4, date: '2026-05-22' }),                              // future — not overdue
+      makeDeadline({ id: 1, date: '2026-05-20' }),                                    // past
+      makeDeadline({ id: 2, date: '2026-05-20', completedAt: '2026-05-20T12:00:00' }), // past (completion is ignored)
+      makeDeadline({ id: 3, date: TODAY }),                                           // today — not past
+      makeDeadline({ id: 4, date: '2026-05-22' }),                                    // future — not past
     ]
-    const result = applyFilters(deadlines, { ...defaultFilters, range: 'overdue' }, TODAY)
-    expect(result).toHaveLength(1)
-    expect(result[0].id).toBe(1)
+    const result = applyFilters(deadlines, { ...defaultFilters, range: 'past' }, TODAY)
+    expect(result.map(d => d.id).sort()).toEqual([1, 2])
   })
 
-  it('F4: range=today — returns deadlines with date === todayStr AND completedAt===null', () => {
+  it('F4: range=today — returns deadlines dated today', () => {
     const deadlines = [
       makeDeadline({ id: 1, date: TODAY }),
-      makeDeadline({ id: 2, date: TODAY, completedAt: '2026-05-21T09:00:00' }),  // completed — excluded
-      makeDeadline({ id: 3, date: '2026-05-20' }),                               // overdue
-      makeDeadline({ id: 4, date: '2026-05-22' }),                               // future
+      makeDeadline({ id: 2, date: '2026-05-20' }),  // past
+      makeDeadline({ id: 3, date: '2026-05-22' }),  // future
     ]
     const result = applyFilters(deadlines, { ...defaultFilters, range: 'today' }, TODAY)
-    expect(result).toHaveLength(1)
-    expect(result[0].id).toBe(1)
+    expect(result.map(d => d.id)).toEqual([1])
   })
 
-  it('F5: range=this-week — returns deadlines within Sunday-Saturday window', () => {
-    // This week: 2026-05-17 (Sun) — 2026-05-23 (Sat)
+  it('F5: range=this-week — from today through Saturday (earlier days of the week are past)', () => {
+    // This week: 2026-05-17 (Sun) — 2026-05-23 (Sat); today is Thursday 2026-05-21
     const deadlines = [
-      makeDeadline({ id: 1, date: '2026-05-16' }),  // day before Sunday — not this week
-      makeDeadline({ id: 2, date: '2026-05-17' }),  // Sunday start of week
-      makeDeadline({ id: 3, date: '2026-05-20' }),  // Wednesday (overdue vs TODAY but in week)
+      makeDeadline({ id: 2, date: '2026-05-17' }),  // Sunday — past
+      makeDeadline({ id: 3, date: '2026-05-20' }),  // Wednesday — past
       makeDeadline({ id: 4, date: TODAY }),          // Thursday
       makeDeadline({ id: 5, date: '2026-05-23' }),  // Saturday end of week
       makeDeadline({ id: 6, date: '2026-05-24' }),  // Sunday — next week
     ]
     const result = applyFilters(deadlines, { ...defaultFilters, range: 'this-week' }, TODAY)
-    const ids = result.map(d => d.id)
-    expect(ids).toContain(2)  // Sunday in window
-    expect(ids).toContain(3)  // Wednesday in window (past date, not completed — still included)
-    expect(ids).toContain(4)  // Thursday in window
-    expect(ids).toContain(5)  // Saturday in window
-    expect(ids).not.toContain(1)  // before window
-    expect(ids).not.toContain(6)  // after window
+    expect(result.map(d => d.id)).toEqual([4, 5])
   })
 
-  it('F6: range=this-month — returns deadlines within calendar month of todayStr', () => {
-    // May 2026: 2026-05-01 — 2026-05-31
+  it('F6: range=this-month — from today through the last day of the month', () => {
+    // May 2026: today 2026-05-21, month ends 2026-05-31
     const deadlines = [
-      makeDeadline({ id: 1, date: '2026-04-30' }),  // April — outside month
-      makeDeadline({ id: 2, date: '2026-05-01' }),  // first of month
-      makeDeadline({ id: 3, date: '2026-05-15' }),  // mid-month
+      makeDeadline({ id: 2, date: '2026-05-01' }),  // first of month — past
+      makeDeadline({ id: 3, date: '2026-05-21' }),  // today
       makeDeadline({ id: 4, date: '2026-05-31' }),  // last of month
       makeDeadline({ id: 5, date: '2026-06-01' }),  // June — outside month
     ]
     const result = applyFilters(deadlines, { ...defaultFilters, range: 'this-month' }, TODAY)
-    const ids = result.map(d => d.id)
-    expect(ids).not.toContain(1)  // April
-    expect(ids).toContain(2)      // May 1
-    expect(ids).toContain(3)      // May 15
-    expect(ids).toContain(4)      // May 31
-    expect(ids).not.toContain(5)  // June
+    expect(result.map(d => d.id)).toEqual([3, 4])
   })
 
-  it('F7: range=all — passthrough, all active (non-completed) deadlines returned regardless of date', () => {
+  it('F7: range=all (Upcoming) — today onward, whatever the completion state; nothing past', () => {
     const deadlines = [
-      makeDeadline({ id: 1, date: '2020-01-01' }),   // far past
+      makeDeadline({ id: 1, date: '2020-01-01' }),   // far past — excluded
       makeDeadline({ id: 2, date: TODAY }),           // today
       makeDeadline({ id: 3, date: '2030-12-31' }),   // far future
-      makeDeadline({ id: 4, date: '2026-05-15', completedAt: '2026-05-15T10:00:00' }), // completed — excluded
+      makeDeadline({ id: 4, date: '2026-06-15', completedAt: '2026-05-15T10:00:00' }), // future, completed — still shown
     ]
     const result = applyFilters(deadlines, { ...defaultFilters, range: 'all' }, TODAY)
-    const ids = result.map(d => d.id)
-    expect(ids).toContain(1)
-    expect(ids).toContain(2)
-    expect(ids).toContain(3)
-    expect(ids).not.toContain(4)  // completed always excluded
+    expect(result.map(d => d.id)).toEqual([2, 3, 4])
   })
 
   it('F8: case AND type AND range intersection — all three filters applied together (AND semantics)', () => {
@@ -152,10 +132,10 @@ describe('applyFilters — FILT-01, FILT-02, FILT-03', () => {
       makeDeadline({ id: 3, date: '2026-05-22', caseLabel: 'Smith v. Jones', typeId: 2 }),
       // Outside this-week (next week)
       makeDeadline({ id: 4, date: '2026-05-25', caseLabel: 'Smith v. Jones', typeId: 1 }),
-      // Correct but completed
-      makeDeadline({ id: 5, date: '2026-05-22', caseLabel: 'Smith v. Jones', typeId: 1, completedAt: '2026-05-21T10:00:00' }),
+      // In this week but already past
+      makeDeadline({ id: 5, date: '2026-05-19', caseLabel: 'Smith v. Jones', typeId: 1 }),
     ]
-    const filters: Filters = { case: 'Smith v. Jones', typeIds: [1], range: 'this-week', showCompleted: false }
+    const filters: Filters = { case: 'Smith v. Jones', typeIds: [1], range: 'this-week' }
     const result = applyFilters(deadlines, filters, TODAY)
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe(1)

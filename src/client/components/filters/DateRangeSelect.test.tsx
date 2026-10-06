@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Wave 2 — converted from it.todo stubs to live it() tests.
 //
-// Requirements: FILT-03 (date range preset — 5 options: Overdue, Today, This Week, This Month, All)
+// Requirements: FILT-03 (date range preset — 5 options: Upcoming, Today, This Week, This Month, Past)
 // Default = all; selecting default removes ?range= (default-elision)
 import React from 'react'
 import { describe, it, expect, afterEach, beforeAll } from 'vitest'
@@ -70,14 +70,14 @@ function renderDateRangeSelect(initialEntry: string): {
 }
 
 describe('DateRangeSelect — Wave 0 stubs (FILT-03)', () => {
-  it('DRS1: default "All" preset is shown when ?range= is absent from URL', () => {
+  it('DRS1: default "Upcoming" preset is shown when ?range= is absent from URL', () => {
     renderDateRangeSelect('/')
-    // The SelectTrigger should show 'All' as the selected option (via SelectValue)
+    // The SelectTrigger should show 'Upcoming' as the selected option (via SelectValue)
     const trigger = screen.getByRole('combobox', { name: /date range filter/i })
-    expect(trigger.textContent).toContain('All')
+    expect(trigger.textContent).toContain('Upcoming')
   })
 
-  it('DRS2: selecting "overdue" preset writes ?range=overdue to URL', async () => {
+  it('DRS2: selecting "Past" writes ?range=past to URL', async () => {
     const { locationRef } = renderDateRangeSelect('/')
 
     // Open the select — Radix Select uses role="combobox" on the trigger
@@ -87,19 +87,17 @@ describe('DateRangeSelect — Wave 0 stubs (FILT-03)', () => {
 
     // Radix renders the options in a portal to document.body
     await waitFor(() => {
-      const overdue = screen.queryByText('Overdue')
-      expect(overdue).not.toBeNull()
+      expect(screen.queryByText('Past')).not.toBeNull()
     })
-    // Click the Overdue option
-    fireEvent.click(screen.getByText('Overdue'))
+    fireEvent.click(screen.getByText('Past'))
 
     await waitFor(() => {
-      expect(locationRef.current).toContain('range=overdue')
+      expect(locationRef.current).toContain('range=past')
     })
   })
 
-  it('DRS3: selecting "All" explicitly removes ?range= from URL (default-elision)', async () => {
-    const { locationRef } = renderDateRangeSelect('/?range=overdue')
+  it('DRS3: selecting "Upcoming" explicitly removes ?range= from URL (default-elision)', async () => {
+    const { locationRef } = renderDateRangeSelect('/?range=past')
 
     const trigger = screen.getByRole('combobox', { name: /date range filter/i })
     fireEvent.click(trigger)
@@ -108,12 +106,12 @@ describe('DateRangeSelect — Wave 0 stubs (FILT-03)', () => {
     // Wait for the dropdown to render
     await waitFor(() => {
       // The Select Content should render in portal — look for option text
-      const options = screen.queryAllByText('All')
+      const options = screen.queryAllByText('Upcoming')
       expect(options.length).toBeGreaterThan(0)
     })
 
-    // Get all 'All' text nodes — the option in the list (not the trigger value)
-    const allOptions = screen.queryAllByText('All')
+    // The option in the list (not the trigger value)
+    const allOptions = screen.queryAllByText('Upcoming')
     // Click the one inside the SelectContent (last one to avoid the trigger value)
     fireEvent.click(allOptions[allOptions.length - 1])
 
@@ -122,7 +120,7 @@ describe('DateRangeSelect — Wave 0 stubs (FILT-03)', () => {
     })
   })
 
-  it('DRS4: all 5 preset options are present in the select menu (overdue, today, this-week, this-month, all)', async () => {
+  it('DRS4: all 5 preset options are present in the select menu (upcoming, today, this-week, this-month, past)', async () => {
     renderDateRangeSelect('/')
 
     const trigger = screen.getByRole('combobox', { name: /date range filter/i })
@@ -130,12 +128,12 @@ describe('DateRangeSelect — Wave 0 stubs (FILT-03)', () => {
     fireEvent.pointerDown(trigger)
 
     await waitFor(() => {
-      expect(screen.queryByText('Overdue')).not.toBeNull()
+      expect(screen.queryByText('Past')).not.toBeNull()
       expect(screen.queryByText('Today')).not.toBeNull()
       expect(screen.queryByText('This Week')).not.toBeNull()
       expect(screen.queryByText('This Month')).not.toBeNull()
-      // All appears in trigger + list
-      expect(screen.queryAllByText('All').length).toBeGreaterThan(0)
+      // Upcoming appears in trigger + list
+      expect(screen.queryAllByText('Upcoming').length).toBeGreaterThan(0)
     })
   })
 })

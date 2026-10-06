@@ -184,11 +184,8 @@ export function App() {
       isError={deadlinesQuery.isError}
       filtersActive={!isDefault}
       todayStr={todayStr}
+      pastView={filters.range === 'past'}
       onRowClick={(id) => selectDeadline(id === selectedDeadlineId ? -1 : id)}
-      onComplete={(id, completed) => mutations.update.mutate({
-        id,
-        patch: { completedAt: completed ? new Date().toISOString() : null },
-      })}
       onDelete={(id, onError) => {
         mutations.remove.mutate(id, { onError })
         if (id === selectedDeadlineId) {

@@ -1,19 +1,14 @@
 import { useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-export type DateRange = 'overdue' | 'today' | 'this-week' | 'this-month' | 'all'
+import type { DateRange, Filters } from '@/shared/lib/filters.js'
+export type { DateRange, Filters }
 
-export interface Filters {
-  case: string | null   // ?case=Smith%20v.%20Jones
-  typeIds: number[]     // ?type=1,3,7
-  range: DateRange      // ?range=this-week (default: all, omitted from URL when at default)
-  showCompleted: boolean // ?completed=1 (default: false; omitted from URL when false)
-}
-
-// Default is everything: the desktop wallpaper already shows the next few weeks at a glance
+// URL: ?case=Smith%20v.%20Jones  ?type=1,3,7  ?range=this-week (omitted at the default)
+// Default is everything from today on: the wallpaper already shows the next few weeks
 const DEFAULT_RANGE: DateRange = 'all'
 
-const VALID_RANGES: readonly DateRange[] = ['overdue', 'today', 'this-week', 'this-month', 'all'] as const
+const VALID_RANGES: readonly DateRange[] = ['past', 'today', 'this-week', 'this-month', 'all'] as const
 
 function parseTypeIds(raw: string | null): number[] {
   if (!raw) return []
@@ -25,6 +20,7 @@ function parseTypeIds(raw: string | null): number[] {
 
 function parseRange(raw: string | null): DateRange {
   if (!raw) return DEFAULT_RANGE
+  if (raw === 'overdue') return 'past'   // bookmarks from before the Past view
   if ((VALID_RANGES as readonly string[]).includes(raw)) return raw as DateRange
   return DEFAULT_RANGE
 }
@@ -34,7 +30,6 @@ export function useFilters(): {
   setCase: (v: string | null) => void
   setTypeIds: (ids: number[]) => void
   setRange: (r: DateRange) => void
-  setShowCompleted: (v: boolean) => void
   clearAll: () => void
   isDefault: boolean
 } {
@@ -44,8 +39,6 @@ export function useFilters(): {
     case: params.get('case') || null,
     typeIds: parseTypeIds(params.get('type')),
     range: parseRange(params.get('range')),
-    // T-04-03-01: strict '===' '1' comparison rejects null, '0', 'true', 'on', etc.
-    showCompleted: params.get('completed') === '1',
   }), [params])
 
   const setCase = useCallback((v: string | null) => {
@@ -72,15 +65,6 @@ export function useFilters(): {
     })
   }, [setParams])
 
-  const setShowCompleted = useCallback((v: boolean) => {
-    setParams(prev => {
-      const next = new URLSearchParams(prev)
-      // Default-elision: false removes param (not in URL by default)
-      if (!v) next.delete('completed'); else next.set('completed', '1')
-      return next
-    })
-  }, [setParams])
-
   const clearAll = useCallback(() => {
     setParams(new URLSearchParams())
   }, [setParams])
@@ -88,8 +72,7 @@ export function useFilters(): {
   const isDefault =
     filters.case === null &&
     filters.typeIds.length === 0 &&
-    filters.range === DEFAULT_RANGE &&
-    filters.showCompleted === false
+    filters.range === DEFAULT_RANGE
 
-  return { filters, setCase, setTypeIds, setRange, setShowCompleted, clearAll, isDefault }
+  return { filters, setCase, setTypeIds, setRange, clearAll, isDefault }
 }

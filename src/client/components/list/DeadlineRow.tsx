@@ -4,7 +4,6 @@ import { Copy } from 'lucide-react'
 import { parseLocalDate } from '@/shared/lib/date.js'
 import type { Bucket } from '@/shared/lib/buckets.js'
 import type { Deadline, DeadlineType } from '@/shared/schemas/deadline.js'
-import { Checkbox } from '@/client/components/ui/checkbox.js'
 import { CaseBadge } from '@/client/components/CaseBadge.js'
 
 type DeleteStep = 'idle' | 'confirm' | 'executing'
@@ -15,10 +14,8 @@ export interface DeadlineRowProps {
   typesById: Map<number, DeadlineType>
   /** Case -> color (useCaseColors). Rows are color-coded by case, not by type. */
   caseColorOf: (caseLabel: string) => string
-  /** Called when the row body is clicked (not checkbox, not delete button) */
+  /** Called when the row body is clicked (not the action buttons) */
   onRowClick?: (id: number) => void
-  /** Called when checkbox is toggled; completed=true → mark complete, false → unmark */
-  onComplete?: (id: number, completed: boolean) => void
   /** Called after 2nd confirm click on delete button.
    *  The second argument is a reset callback; callers must invoke it on failure
    *  to return the row from 'executing' to 'idle' (WR-01). */
@@ -38,7 +35,6 @@ export function DeadlineRow({
   typesById,
   caseColorOf,
   onRowClick,
-  onComplete,
   onDelete,
   onDuplicate,
   selectedDeadlineId,
@@ -48,9 +44,10 @@ export function DeadlineRow({
   const formattedDate = parsedDate ? format(parsedDate, 'MMM d, yyyy') : deadline.date
   const typeName = typesById.get(deadline.typeId)?.name ?? 'Unknown'
 
-  const isOverdue = bucket === 'overdue'
+  // A deadline view, not a task list: no done/overdue states. Today stands out; past
+  // entries (the Past view) are quieter.
   const isToday = bucket === 'today'
-  const isCompleted = deadline.completedAt !== null
+  const isPast = bucket === 'overdue'
   const isSelected = selectedDeadlineId === deadline.id
 
   // 2-step delete confirm state
@@ -107,7 +104,7 @@ export function DeadlineRow({
   // Selected row highlight classes
   let selectedClass = ''
   if (isSelected) {
-    if (isOverdue || isToday) {
+    if (isToday) {
       selectedClass = 'outline outline-1 outline-primary/40 -outline-offset-1'
     } else {
       selectedClass = 'bg-primary/10'
@@ -116,14 +113,12 @@ export function DeadlineRow({
 
   const caseColor = caseColorOf(deadline.caseLabel)
 
-  // Left bar = case color on every row; overdue/today are signalled by row tint + date color.
+  // Left bar = case color on every row; today is signalled by row tint + date color.
   const containerClass = [
     'group relative flex items-center h-12 gap-4 border-b border-border last:border-b-0',
     'border-l-4 pl-3 pr-4 transition-colors cursor-pointer',
-    isOverdue ? 'bg-red-50 hover:bg-red-100' : '',
-    isToday ? 'bg-amber-50 hover:bg-amber-100' : '',
-    !isOverdue && !isToday ? 'hover:bg-muted/50' : '',
-    isCompleted ? 'opacity-50' : '',
+    isToday ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-muted/50',
+    isPast ? 'opacity-70' : '',
     selectedClass,
   ]
     .filter(Boolean)
@@ -131,46 +126,23 @@ export function DeadlineRow({
 
   const dateClass = [
     'w-[120px] shrink-0 text-sm',
-    isOverdue ? 'text-red-700 font-semibold' : '',
-    isToday ? 'text-amber-700 font-semibold' : '',
-    !isOverdue && !isToday ? 'text-muted-foreground' : '',
+    isToday ? 'text-amber-700 font-semibold' : 'text-muted-foreground',
   ]
     .filter(Boolean)
     .join(' ')
 
-  const caseLabelClass = [
-    'text-sm flex-1 min-w-0',
-    isCompleted ? 'line-through' : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
+  const caseLabelClass = 'text-sm flex-1 min-w-0'
 
-  const ariaLabel = [
-    `${deadline.caseLabel}, ${typeName}, due ${formattedDate}`,
-    isOverdue ? ', overdue' : '',
-    isCompleted ? ', completed' : '',
-  ].join('')
+  const ariaLabel = `${deadline.caseLabel}, ${typeName}, ${isPast ? 'was due' : 'due'} ${formattedDate}`
 
   return (
     <div
       role="row"
       aria-label={ariaLabel}
-      data-completed={isCompleted ? 'true' : undefined}
       className={containerClass}
       style={{ borderLeftColor: caseColor }}
       onClick={() => onRowClick?.(deadline.id)}
     >
-      {/* Checkbox — click stops propagation so row-click doesn't fire */}
-      <Checkbox
-        checked={isCompleted}
-        onCheckedChange={(checked) => {
-          onComplete?.(deadline.id, !!checked)
-        }}
-        onClick={(e) => e.stopPropagation()}
-        aria-label={`Mark ${deadline.caseLabel} ${isCompleted ? 'incomplete' : 'complete'}`}
-        className="shrink-0 w-5 h-5"
-      />
-
       {/* Date */}
       <span className={dateClass}>
         {formattedDate}
