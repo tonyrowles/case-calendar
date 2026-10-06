@@ -17,8 +17,9 @@ export interface DigestDeadline {
   completedAt: string | null      // ISO timestamp or null
 }
 
+/** The next 14 days from today, by date. No past/overdue section: like the list and the
+ *  wallpaper, the digest shows what is coming up, not a task backlog. */
 export interface DigestData {
-  overdue: DigestDeadline[]       // date < today, completedAt null, capped at 30 (most-recent dates first)
   grouped: { date: string; deadlines: DigestDeadline[] }[]  // date ascending; deadlines sorted by caseLabel within date
 }
 
@@ -101,8 +102,7 @@ function rowTemplate(d: DigestDeadline): string {
  * Filter and group deadlines for the email digest.
  *
  * Rules:
- * - Excludes deadlines where completedAt !== null.
- * - overdue: date < todayStr, sorted DESC (most recent first), capped at 30.
+ * - Excludes deadlines where completedAt !== null, and anything before today.
  * - grouped: date >= todayStr AND date <= todayStr+14, grouped by date ASC,
  *   deadlines within each date sorted by caseLabel ASC (localeCompare).
  */
@@ -112,13 +112,7 @@ export function filterDigest(deadlines: DigestDeadline[], todayStr: string): Dig
   // Exclude completed
   const active = deadlines.filter(d => d.completedAt === null)
 
-  // Partition
-  const overdueAll = active.filter(d => d.date < todayStr)
   const inWindow = active.filter(d => d.date >= todayStr && d.date <= windowEnd)
-
-  // Sort overdue: most recent date first (DESC), cap at 30
-  overdueAll.sort((a, b) => b.date.localeCompare(a.date))
-  const overdue = overdueAll.slice(0, 30)
 
   // Group in-window by date, dates ASC
   const dateMap = new Map<string, DigestDeadline[]>()
@@ -137,7 +131,7 @@ export function filterDigest(deadlines: DigestDeadline[], todayStr: string): Dig
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, deadlines]) => ({ date, deadlines }))
 
-  return { overdue, grouped }
+  return { grouped }
 }
 
 /**
@@ -145,7 +139,7 @@ export function filterDigest(deadlines: DigestDeadline[], todayStr: string): Dig
  * count === 0 → All clear; count === 1 → singular; count >= 2 → plural.
  */
 export function buildSubject(data: DigestData): string {
-  const count = data.overdue.length + data.grouped.reduce((s, g) => s + g.deadlines.length, 0)
+  const count = data.grouped.reduce((s, g) => s + g.deadlines.length, 0)
   if (count === 0) return 'Case Calendar digest — All clear in next 14 days'
   if (count === 1) return 'Case Calendar digest — 1 deadline in next 14 days'
   return `Case Calendar digest — ${count} deadlines in next 14 days`
@@ -155,10 +149,6 @@ export function buildSubject(data: DigestData): string {
  * Render the plain-text email body.
  *
  * Layout:
- *   === OVERDUE === (if any)
- *   [YYYY-MM-DD] Case — Type — Description
- *   ...
- *
  *   === Weekday, Month D ===
  *   [YYYY-MM-DD] Case — Type
  *   ...
@@ -166,19 +156,11 @@ export function buildSubject(data: DigestData): string {
  * Empty data: single line "No deadlines in the next 14 days."
  */
 export function renderPlainText(data: DigestData): string {
-  if (data.overdue.length === 0 && data.grouped.length === 0) {
+  if (data.grouped.length === 0) {
     return 'No deadlines in the next 14 days.'
   }
 
   const lines: string[] = []
-
-  if (data.overdue.length > 0) {
-    lines.push('=== OVERDUE ===')
-    for (const d of data.overdue) {
-      lines.push(formatLine(d))
-    }
-    lines.push('')  // blank separator
-  }
 
   for (const group of data.grouped) {
     lines.push(`=== ${formatDateHeader(group.date)} ===`)
@@ -205,7 +187,7 @@ export function renderPlainText(data: DigestData): string {
  * - typeColor used verbatim (DB-validated hex — T-10-CSS accepted risk).
  */
 export function renderHTML(data: DigestData): string {
-  const isEmpty = data.overdue.length === 0 && data.grouped.length === 0
+  const isEmpty = data.grouped.length === 0
 
   const header =
     `<tr><td style="background:#1e3a5f;color:#fff;padding:16px 24px;">` +
@@ -220,16 +202,6 @@ export function renderHTML(data: DigestData): string {
       `No deadlines in the next 14 days.` +
       `</td></tr>`
   } else {
-    if (data.overdue.length > 0) {
-      body +=
-        `<tr><td style="background:#dc2626;color:#fff;padding:8px 24px;font-weight:600;font-size:12px;">` +
-        `OVERDUE` +
-        `</td></tr>`
-      for (const d of data.overdue) {
-        body += rowTemplate(d)
-      }
-    }
-
     for (const group of data.grouped) {
       const headerText = formatDateHeader(group.date).toUpperCase()
       body +=

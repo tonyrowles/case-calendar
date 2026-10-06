@@ -88,7 +88,7 @@ const fixtures: Deadline[] = [
 ]
 
 describe('ListView — Wave 0 stubs (VIEW-03, VIEW-05)', () => {
-  it('L1: bucket ordering — Overdue renders before Today, Today before ThisWeek, NextWeek before Later', () => {
+  it('L1: the list starts at Today (no Overdue/Past section), then This Week, then Later', () => {
     renderWithQuery(
       <ListView
         deadlines={fixtures}
@@ -104,19 +104,57 @@ filtersActive={false}
 
     // Get all bucket header buttons and check order by textContent
     const allHeaders = screen.getAllByRole('button')
-    const overduIdx = allHeaders.findIndex(h => h.textContent?.includes('Overdue'))
+    expect(allHeaders.some(h => /Overdue|Past/.test(h.textContent ?? ''))).toBe(false)
     const todayIdx = allHeaders.findIndex(h => h.textContent?.includes('Today'))
     const thisWeekIdx = allHeaders.findIndex(h => h.textContent?.includes('This Week'))
     const laterIdx = allHeaders.findIndex(h => h.textContent?.includes('Later'))
 
-    expect(overduIdx).toBeGreaterThanOrEqual(0)
     expect(todayIdx).toBeGreaterThanOrEqual(0)
     expect(thisWeekIdx).toBeGreaterThanOrEqual(0)
     expect(laterIdx).toBeGreaterThanOrEqual(0)
 
-    expect(overduIdx).toBeLessThan(todayIdx)
     expect(todayIdx).toBeLessThan(thisWeekIdx)
     expect(thisWeekIdx).toBeLessThan(laterIdx)
+  })
+
+  it('L1b: the Past view shows one "Past" section, most recent first', () => {
+    const past = [
+      { ...fixtures[0], id: 901, date: '2026-01-05', caseLabel: 'Older v. Case', createdAt: '2026-01-01 00:00:00' },
+      { ...fixtures[0], id: 902, date: '2026-03-10', caseLabel: 'Newer v. Case', createdAt: '2026-01-01 00:00:01' },
+    ]
+    renderWithQuery(
+      <ListView
+        deadlines={past}
+        isLoading={false}
+        isError={false}
+        filtersActive={true}
+        todayStr={TODAY}
+        pastView
+      />,
+      qc => {
+        qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
+      }
+    )
+    const headers = screen.getAllByRole('button').filter(h => /Past|Today|This Week|Next Week|Later/.test(h.textContent ?? ''))
+    expect(headers.map(h => h.textContent?.replace(/\d+$/, '').trim())).toEqual(['Past'])
+    const rows = screen.getAllByRole('row').map(r => r.getAttribute('aria-label') ?? '')
+    expect(rows.findIndex(l => l.startsWith('Newer'))).toBeLessThan(rows.findIndex(l => l.startsWith('Older')))
+  })
+
+  it('L1c: nothing upcoming (no filters) points to the Past view', () => {
+    renderWithQuery(
+      <ListView
+        deadlines={[{ ...fixtures[0], id: 903, date: '2020-01-01' }]}
+        isLoading={false}
+        isError={false}
+        filtersActive={false}
+        todayStr={TODAY}
+      />,
+      qc => {
+        qc.setQueryData(['deadline-types'], [TYPE_FILING])
+      }
+    )
+    expect(screen.getByText('Nothing coming up. Past deadlines are under Date: Past.')).toBeDefined()
   })
 
   it('L2: empty buckets hidden — if "Next Week" has zero deadlines, no "Next Week" header renders', () => {
@@ -164,7 +202,7 @@ filtersActive={false}
     expect(screen.getByText('Garcia v. City')).toBeDefined()
   })
 
-  it('L4: all-empty state — when ALL buckets are empty after filtering, renders "No deadlines match your filters." copy', () => {
+  it('L4: all-empty state — when ALL buckets are empty after filtering, says no upcoming deadlines match', () => {
     renderWithQuery(
       <ListView
         deadlines={[]}
@@ -178,7 +216,7 @@ filtersActive={true}
       }
     )
 
-    expect(screen.getByText('No deadlines match your filters.')).toBeDefined()
+    expect(screen.getByText('No upcoming deadlines match your filters.')).toBeDefined()
     // WR-03: duplicate Clear button removed from empty state — FilterBar's "Clear" button
     // is the single affordance (visible above the list at all times when filters are active).
   })

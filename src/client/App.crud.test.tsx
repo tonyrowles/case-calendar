@@ -200,79 +200,19 @@ describe('App — CRUD integration (CRUD-03/04/05/06/07)', () => {
     }, { timeout: 3000 })
   })
 
-  it('marking a deadline complete hides it from the default list (no ?completed=1)', async () => {
-    const { updateDeadline } = await import('./lib/api.js')
-    const completedDeadline = { ...deadlineFixtures[0], completedAt: new Date().toISOString() }
-    vi.mocked(updateDeadline).mockResolvedValueOnce(completedDeadline)
-
-    const { queryClient } = renderApp('/?range=all', qc => {
+  it('rows have no complete checkbox and the filter bar has no Show completed switch', async () => {
+    renderApp('/?range=all', qc => {
       qc.setQueryData(['deadlines'], deadlineFixtures)
       qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
       qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
     })
 
     await waitFor(() => {
-      expect(screen.queryAllByRole('row').length).toBe(2)
+      expect(screen.queryAllByRole('row').length).toBeGreaterThan(0)
     }, { timeout: 3000 })
 
-    // Find the checkbox for the first row
-    const checkbox = screen.getAllByRole('checkbox')[0]
-    fireEvent.click(checkbox)
-
-    await waitFor(() => {
-      expect(updateDeadline).toHaveBeenCalledWith(
-        deadlineFixtures[0].id,
-        expect.objectContaining({ completedAt: expect.any(String) })
-      )
-    }, { timeout: 3000 })
-
-    // Simulate cache with completed deadline
-    queryClient.setQueryData(['deadlines'], [completedDeadline, deadlineFixtures[1]])
-
-    // Without ?completed=1, completed deadlines are hidden → 1 row
-    await waitFor(() => {
-      expect(screen.queryAllByRole('row').length).toBe(1)
-    }, { timeout: 3000 })
-  })
-
-  it('marking a deadline complete keeps it visible when ?completed=1 is set', async () => {
-    const completedAt = new Date().toISOString()
-    const completedDeadline = { ...deadlineFixtures[0], completedAt }
-
-    renderApp('/?range=all&completed=1', qc => {
-      qc.setQueryData(['deadlines'], [completedDeadline, deadlineFixtures[1]])
-      qc.setQueryData(['deadline-types'], [TYPE_FILING, TYPE_HEARING])
-      qc.setQueryData(['case-labels'], ['Smith v. Jones', 'Garcia v. City'])
-    })
-
-    // With ?completed=1 and range=all, at least 1 row shows
-    await waitFor(() => {
-      const rows = screen.queryAllByRole('row')
-      expect(rows.length).toBeGreaterThan(0)
-    }, { timeout: 3000 })
-
-    // The Show completed switch should be active (URL has ?completed=1)
-    const showCompletedSwitch = screen.queryByRole('switch', { name: /show completed/i })
-    // Switch state is checked (active because URL has completed=1)
-    if (showCompletedSwitch) {
-      expect((showCompletedSwitch as HTMLInputElement).getAttribute('aria-checked')).toBe('true')
-    }
-
-    // At minimum, the active deadline (deadlineFixtures[1]) is visible
-    const rows = screen.getAllByRole('row')
-    expect(rows.length).toBeGreaterThan(0)
-    // Check if any row has data-completed="true" (completed deadline visible)
-    // This may be 0 if the deadline range filter affected it
-    const completedRows = rows.filter(r => r.getAttribute('data-completed') === 'true')
-    // The completed deadline SHOULD be visible since showCompleted=true and range=all
-    // If completedRows.length > 0, verify opacity treatment
-    if (completedRows.length > 0) {
-      expect(completedRows[0].className).toContain('opacity-50')
-    }
-    // Verify Show completed is active by checking the Switch component
-    // (the key behavioral assertion for this SC2 scenario)
-    expect(screen.queryByLabelText('Show completed deadlines') ||
-           screen.queryByRole('switch')).toBeTruthy()
+    expect(screen.queryByRole('checkbox')).toBeNull()
+    expect(screen.queryByText('Show completed')).toBeNull()
   })
 
   it('App header has a Settings link pointing to /settings', async () => {

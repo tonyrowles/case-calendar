@@ -134,7 +134,7 @@ export async function sendDigest(): Promise<void> {
     }
   })
 
-  // Pure transform: filter to overdue + 14-day window
+  // Pure transform: the next 14 days, grouped by date
   const data = filterDigest(deadlines, today)
 
   // Build email content
@@ -152,7 +152,7 @@ export async function sendDigest(): Promise<void> {
     html,
   })
 
-  const count = data.overdue.length + data.grouped.reduce((s, g) => s + g.deadlines.length, 0)
+  const count = data.grouped.reduce((s, g) => s + g.deadlines.length, 0)
   logger.info({ messageId: info.messageId, count, to: process.env.SMTP_TO }, 'email digest sent')
 }
 

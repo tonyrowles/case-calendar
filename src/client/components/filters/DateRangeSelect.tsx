@@ -23,11 +23,11 @@ export function DateRangeSelect(): React.JSX.Element {
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all">All</SelectItem>
-        <SelectItem value="overdue">Overdue</SelectItem>
+        <SelectItem value="all">Upcoming</SelectItem>
         <SelectItem value="today">Today</SelectItem>
         <SelectItem value="this-week">This Week</SelectItem>
         <SelectItem value="this-month">This Month</SelectItem>
+        <SelectItem value="past">Past</SelectItem>
       </SelectContent>
     </Select>
   )

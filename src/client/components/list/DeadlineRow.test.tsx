@@ -32,7 +32,7 @@ function makeDeadline(overrides: Partial<Deadline> = {}): Deadline {
 }
 
 describe('DeadlineRow — Wave 0 stubs (VIEW-04)', () => {
-  it('DR1: overdue row has bg-red-50 tint + red, bold date', () => {
+  it('DR1: a past row (Past view) is quiet: no red alarm, no checkbox, "was due" label', () => {
     const { container } = render(
       <DeadlineRow
         deadline={makeDeadline()}
@@ -42,9 +42,12 @@ describe('DeadlineRow — Wave 0 stubs (VIEW-04)', () => {
       />
     )
     const row = container.firstElementChild as HTMLElement
-    expect(row.className).toContain('bg-red-50')
+    expect(row.className).not.toContain('bg-red-50')
+    expect(row.className).toContain('opacity-70')
     const dateSpan = Array.from(row.querySelectorAll('span')).find(el => el.textContent === 'Jun 15, 2026')
-    expect(dateSpan!.className).toContain('text-red-700')
+    expect(dateSpan!.className).not.toContain('text-red-700')
+    expect(row.getAttribute('aria-label')).toContain('was due Jun 15, 2026')
+    expect(container.querySelector('[role="checkbox"], button[role="checkbox"], input[type="checkbox"]')).toBeNull()
   })
 
   it('DR2: today row has bg-amber-50 tint + amber, bold date', () => {

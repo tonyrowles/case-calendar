@@ -22,29 +22,29 @@ function makeWrapper(initialEntry: string) {
 describe('useFilters — Wave 0 stubs (FILT-04)', () => {
   it('U1: reads URL params → returns typed Filters object (case, typeIds, range)', () => {
     const { result } = renderHook(() => useFilters(), {
-      wrapper: makeWrapper('/?case=Smith&type=1,3&range=overdue'),
+      wrapper: makeWrapper('/?case=Smith&type=1,3&range=past'),
     })
     expect(result.current.filters.case).toBe('Smith')
     expect(result.current.filters.typeIds).toEqual([1, 3])
-    expect(result.current.filters.range).toBe('overdue')
+    expect(result.current.filters.range).toBe('past')
     expect(result.current.isDefault).toBe(false)
   })
 
   it('U2: setter merges — calling setCase with a value merges into existing URL params', () => {
     const { result } = renderHook(() => useFilters(), {
-      wrapper: makeWrapper('/?range=overdue'),
+      wrapper: makeWrapper('/?range=past'),
     })
     act(() => {
       result.current.setCase('Bob')
     })
-    // After setCase, range=overdue is still present and case=Bob added
+    // After setCase, range=past is still present and case=Bob added
     expect(result.current.filters.case).toBe('Bob')
-    expect(result.current.filters.range).toBe('overdue')
+    expect(result.current.filters.range).toBe('past')
   })
 
   it('U3: default-elision — range=all removes ?range= from URL (bare URL = default state)', () => {
     const { result } = renderHook(() => useFilters(), {
-      wrapper: makeWrapper('/?range=overdue'),
+      wrapper: makeWrapper('/?range=past'),
     })
     act(() => {
       result.current.setRange('all')
@@ -56,7 +56,7 @@ describe('useFilters — Wave 0 stubs (FILT-04)', () => {
 
   it('U4: clearAll — calling clearAll navigates to bare URL (no query params)', () => {
     const { result } = renderHook(() => useFilters(), {
-      wrapper: makeWrapper('/?case=Smith&type=1,3&range=overdue'),
+      wrapper: makeWrapper('/?case=Smith&type=1,3&range=past'),
     })
     act(() => {
       result.current.clearAll()
@@ -80,5 +80,12 @@ describe('useFilters — Wave 0 stubs (FILT-04)', () => {
       wrapper: makeWrapper('/?range=garbage'),
     })
     expect(result.current.filters.range).toBe('all')
+  })
+
+  it('U7: old ?range=overdue bookmarks open the Past view', () => {
+    const { result } = renderHook(() => useFilters(), {
+      wrapper: makeWrapper('/?range=overdue'),
+    })
+    expect(result.current.filters.range).toBe('past')
   })
 })

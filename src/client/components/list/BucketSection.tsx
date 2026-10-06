@@ -11,7 +11,6 @@ export interface BucketSectionProps {
   typesById: Map<number, DeadlineType>
   caseColorOf: (caseLabel: string) => string
   onRowClick?: (id: number) => void
-  onComplete?: (id: number, completed: boolean) => void
   onDelete?: (id: number, onError: () => void) => void
   onDuplicate?: (id: number) => void
   selectedDeadlineId?: number | null
@@ -26,7 +25,6 @@ export function BucketSection({
   typesById,
   caseColorOf,
   onRowClick,
-  onComplete,
   onDelete,
   onDuplicate,
   selectedDeadlineId,
@@ -72,7 +70,6 @@ export function BucketSection({
               typesById={typesById}
               caseColorOf={caseColorOf}
               onRowClick={onRowClick}
-              onComplete={onComplete}
               onDelete={onDelete}
               onDuplicate={onDuplicate}
               selectedDeadlineId={selectedDeadlineId}

@@ -37,37 +37,23 @@ describe('filterDigest', () => {
       mk({ id: 2, date: TODAY, caseLabel: 'Done Case', completedAt: '2026-05-20T10:00:00Z' }),
     ]
     const result = filterDigest(deadlines, TODAY)
-    const allDeadlines = [
-      ...result.overdue,
-      ...result.grouped.flatMap(g => g.deadlines),
-    ]
+    const allDeadlines = result.grouped.flatMap(g => g.deadlines)
     expect(allDeadlines.map(d => d.caseLabel)).toEqual(['Open Case'])
   })
 
-  it('classifies overdue deadlines (date < today, completedAt null) in DESC order, capped at 30', () => {
-    // Build 35 overdue deadlines with different dates
-    const overdueDates: DigestDeadline[] = []
-    for (let i = 1; i <= 35; i++) {
-      const dayStr = String(i).padStart(2, '0')
-      overdueDates.push(mk({ id: i, date: `2026-04-${dayStr}`, caseLabel: `Case ${i}`, completedAt: null }))
+  it('leaves out past deadlines: the digest has no overdue section', () => {
+    const past: DigestDeadline[] = []
+    for (let i = 1; i <= 5; i++) {
+      past.push(mk({ id: i, date: `2026-04-0${i}`, caseLabel: `Case ${i}`, completedAt: null }))
     }
-    const result = filterDigest(overdueDates, TODAY)
-    // Should be capped at 30
-    expect(result.overdue.length).toBe(30)
-    // Most recent first (DESC) — 2026-04-35 doesn't exist but let's check ordering with valid dates
-    // The highest dates come first
-    const dates = result.overdue.map(d => d.date)
-    for (let i = 1; i < dates.length; i++) {
-      expect(dates[i] <= dates[i - 1]).toBe(true)
-    }
-    // grouped should be empty
-    expect(result.grouped).toEqual([])
+    const result = filterDigest([...past, mk({ id: 9, date: TODAY, caseLabel: 'Today Case' })], TODAY)
+    expect(Object.keys(result)).toEqual(['grouped'])
+    expect(result.grouped.flatMap(g => g.deadlines).map(d => d.caseLabel)).toEqual(['Today Case'])
   })
 
-  it('today is included in grouped (not overdue)', () => {
+  it('today is included in grouped', () => {
     const deadlines = [mk({ id: 1, date: TODAY, caseLabel: 'Today Case' })]
     const result = filterDigest(deadlines, TODAY)
-    expect(result.overdue).toEqual([])
     expect(result.grouped).toHaveLength(1)
     expect(result.grouped[0].date).toBe(TODAY)
   })
@@ -80,7 +66,6 @@ describe('filterDigest', () => {
       mk({ id: 3, date: '2026-06-08', caseLabel: 'Outside Case' }), // day 15 — excluded
     ]
     const result = filterDigest(deadlines, TODAY)
-    expect(result.overdue).toEqual([])
     const allInWindow = result.grouped.flatMap(g => g.deadlines)
     const labels = allInWindow.map(d => d.caseLabel)
     expect(labels).toContain('Start Case')
@@ -110,15 +95,15 @@ describe('filterDigest', () => {
 
   it('returns empty result when input is empty', () => {
     const result = filterDigest([], TODAY)
-    expect(result).toEqual({ overdue: [], grouped: [] })
+    expect(result).toEqual({ grouped: [] })
   })
 
-  it('returns empty result when all deadlines are outside window and none overdue', () => {
+  it('returns empty result when all deadlines are outside the 14-day window', () => {
     const deadlines = [
       mk({ id: 1, date: '2026-06-08', caseLabel: 'Far Future' }),
     ]
     const result = filterDigest(deadlines, TODAY)
-    expect(result).toEqual({ overdue: [], grouped: [] })
+    expect(result).toEqual({ grouped: [] })
   })
 })
 
@@ -128,13 +113,12 @@ describe('filterDigest', () => {
 
 describe('buildSubject', () => {
   it('returns All clear when count is 0', () => {
-    const data: DigestData = { overdue: [], grouped: [] }
+    const data: DigestData = { grouped: [] }
     expect(buildSubject(data)).toBe('Case Calendar digest — All clear in next 14 days')
   })
 
   it('returns singular when count is 1', () => {
     const data: DigestData = {
-      overdue: [],
       grouped: [{ date: TODAY, deadlines: [mk({ date: TODAY, caseLabel: 'X' })] }],
     }
     expect(buildSubject(data)).toBe('Case Calendar digest — 1 deadline in next 14 days')
@@ -142,18 +126,16 @@ describe('buildSubject', () => {
 
   it('returns plural when count is 2', () => {
     const data: DigestData = {
-      overdue: [mk({ date: '2026-05-23', caseLabel: 'Old' })],
-      grouped: [{ date: TODAY, deadlines: [mk({ date: TODAY, caseLabel: 'New' })] }],
+      grouped: [{ date: TODAY, deadlines: [mk({ date: TODAY, caseLabel: 'New' }), mk({ date: TODAY, caseLabel: 'Newer' })] }],
     }
     expect(buildSubject(data)).toBe('Case Calendar digest — 2 deadlines in next 14 days')
   })
 
   it('returns plural when count is 15', () => {
-    const many = Array.from({ length: 14 }, (_, i) =>
+    const many = Array.from({ length: 15 }, (_, i) =>
       mk({ date: TODAY, caseLabel: `Case ${i}` })
     )
     const data: DigestData = {
-      overdue: [mk({ date: '2026-05-23', caseLabel: 'Old' })],
       grouped: [{ date: TODAY, deadlines: many }],
     }
     expect(buildSubject(data)).toBe('Case Calendar digest — 15 deadlines in next 14 days')
@@ -166,16 +148,13 @@ describe('buildSubject', () => {
 
 describe('renderPlainText', () => {
   it('returns single no-deadlines line when data is empty', () => {
-    expect(renderPlainText({ overdue: [], grouped: [] })).toBe(
+    expect(renderPlainText({ grouped: [] })).toBe(
       'No deadlines in the next 14 days.'
     )
   })
 
-  it('matches inline snapshot for one overdue + two date groups', () => {
+  it('matches inline snapshot for two date groups', () => {
     const data: DigestData = {
-      overdue: [
-        mk({ id: 10, date: '2026-05-22', caseLabel: 'Overdue Case', typeName: 'Hearing', description: 'urgent' }),
-      ],
       grouped: [
         {
           date: '2026-05-25',
@@ -192,10 +171,7 @@ describe('renderPlainText', () => {
       ],
     }
     expect(renderPlainText(data)).toMatchInlineSnapshot(`
-      "=== OVERDUE ===
-      [2026-05-22] Overdue Case — Hearing — urgent
-
-      === Monday, May 25 ===
+      "=== Monday, May 25 ===
       [2026-05-25] Smith v. Jones — Filing — Motion to compel
 
       === Tuesday, May 26 ===
@@ -205,7 +181,6 @@ describe('renderPlainText', () => {
 
   it('omits description separator when description is empty', () => {
     const data: DigestData = {
-      overdue: [],
       grouped: [
         {
           date: '2026-05-25',
@@ -223,7 +198,6 @@ describe('renderPlainText', () => {
 
   it('includes description when non-empty', () => {
     const data: DigestData = {
-      overdue: [],
       grouped: [
         {
           date: '2026-05-25',
@@ -239,7 +213,6 @@ describe('renderPlainText', () => {
 
   it('date header uses EEEE, MMMM d format (weekday + month day)', () => {
     const data: DigestData = {
-      overdue: [],
       grouped: [
         {
           date: '2026-05-25',
@@ -260,7 +233,6 @@ describe('renderPlainText', () => {
 describe('renderHTML', () => {
   it('contains outer table with width:600px exactly once', () => {
     const data: DigestData = {
-      overdue: [],
       grouped: [
         {
           date: TODAY,
@@ -275,13 +247,13 @@ describe('renderHTML', () => {
   })
 
   it('has no <style> tag', () => {
-    const data: DigestData = { overdue: [], grouped: [] }
+    const data: DigestData = { grouped: [] }
     const html = renderHTML(data)
     expect(html).not.toContain('<style')
   })
 
   it('has border="0" cellpadding="0" cellspacing="0" attributes', () => {
-    const data: DigestData = { overdue: [], grouped: [] }
+    const data: DigestData = { grouped: [] }
     const html = renderHTML(data)
     expect(html).toContain('border="0"')
     expect(html).toContain('cellpadding="0"')
@@ -290,7 +262,6 @@ describe('renderHTML', () => {
 
   it('escapes & < > " in caseLabel', () => {
     const data: DigestData = {
-      overdue: [],
       grouped: [
         {
           date: TODAY,
@@ -308,7 +279,6 @@ describe('renderHTML', () => {
 
   it('escapes typeName', () => {
     const data: DigestData = {
-      overdue: [],
       grouped: [
         {
           date: TODAY,
@@ -325,7 +295,6 @@ describe('renderHTML', () => {
 
   it('escapes description', () => {
     const data: DigestData = {
-      overdue: [],
       grouped: [
         {
           date: TODAY,
@@ -341,7 +310,6 @@ describe('renderHTML', () => {
 
   it('includes typeColor in badge background style', () => {
     const data: DigestData = {
-      overdue: [],
       grouped: [
         {
           date: TODAY,
@@ -356,17 +324,16 @@ describe('renderHTML', () => {
   })
 
   it('returns "No deadlines" message for empty data', () => {
-    const html = renderHTML({ overdue: [], grouped: [] })
+    const html = renderHTML({ grouped: [] })
     expect(html).toContain('No deadlines in the next 14 days.')
   })
 
-  it('includes red OVERDUE section bar when overdue deadlines exist', () => {
+  it('has no OVERDUE section (no red bar)', () => {
     const data: DigestData = {
-      overdue: [mk({ id: 1, date: '2026-05-22', caseLabel: 'Old Case' })],
-      grouped: [],
+      grouped: [{ date: TODAY, deadlines: [mk({ id: 1, date: TODAY, caseLabel: 'Today Case' })] }],
     }
     const html = renderHTML(data)
-    expect(html).toContain('OVERDUE')
-    expect(html).toContain('#dc2626')
+    expect(html).not.toContain('OVERDUE')
+    expect(html).not.toContain('#dc2626')
   })
 })
