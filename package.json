@@ -1,6 +1,6 @@
 {
   "name": "case-calendar",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A self-hosted single-user webapp for tracking case deadlines",
   "license": "MIT",
   "type": "module",
