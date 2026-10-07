@@ -4,6 +4,8 @@ A self-hosted, single-user webapp for a practicing lawyer to track every active 
 
 ---
 
+Project overview and demo: [Case Calendar: litigation deadlines on your Windows desktop](https://tonyrowles.com/projects/case-calendar/).
+
 ## Install (Windows 10/11)
 
 1. Download `CaseCalendarSetup-<version>.exe` from the [latest release](../../releases/latest) and run it.
