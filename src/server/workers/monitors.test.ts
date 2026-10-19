@@ -35,6 +35,21 @@ describe('listMonitors', () => {
     __setDetectMonitors(async () => { throw new Error('powershell failed') })
     expect(await listMonitors(true)).toEqual([])
   })
+
+  it('keeps the real monitor through a transient anonymous 1024x768 display', async () => {
+    let connected = true
+    __setDetectMonitors(async () => connected ? [G9] : [{ ...G9, id: '', width: 1024, height: 768, scale: 1 }])
+    expect(await listMonitors()).toEqual([G9])
+    connected = false
+    expect(await listMonitors(true)).toEqual([G9])
+    connected = true
+    expect(await listMonitors(true)).toEqual([G9])
+  })
+
+  it('does not select an anonymous display on a cold start', async () => {
+    __setDetectMonitors(async () => [{ ...G9, id: '', width: 1024, height: 768, scale: 1 }])
+    expect(await listMonitors()).toEqual([])
+  })
 })
 
 describe('buildPowerShellArgs', () => {

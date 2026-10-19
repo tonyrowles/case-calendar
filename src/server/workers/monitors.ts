@@ -64,7 +64,13 @@ export async function listMonitors(force = false): Promise<Monitor[]> {
   if ((process.platform !== 'win32' || process.env.VITEST === 'true') && detectImpl === runScript) return []
   if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache.monitors
   try {
-    const monitors = await detectImpl()
+    // Windows can briefly expose a dummy 1024x768 display with an empty device
+    // path while the real display is unavailable. Never cache it or apply to it:
+    // an empty ID would make SetWallpaper replace every monitor's background.
+    const monitors = (await detectImpl()).filter(m =>
+      m.id.trim().length > 0 && Number.isFinite(m.width) && m.width > 0 &&
+      Number.isFinite(m.height) && m.height > 0)
+    if (monitors.length === 0) throw new Error('No active monitor device paths detected')
     cache = { at: Date.now(), monitors }
     return monitors
   } catch (err) {
