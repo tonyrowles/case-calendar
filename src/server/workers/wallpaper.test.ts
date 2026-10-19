@@ -78,6 +78,7 @@ import cron from 'node-cron'
 import { onMutation } from '../queries.js'
 import { logger } from '../logger.js'
 import { readdir, stat, unlink } from 'node:fs/promises'
+import { __setDetectMonitors, __resetDetectMonitors } from './monitors.js'
 
 // Helper to get the mock page (re-extracted from the mocked chromium chain)
 async function getMockBrowser() {
@@ -113,6 +114,7 @@ function makeDummyWallpaperFiles(dir: string, count: number): string[] {
 }
 
 beforeEach(() => {
+  __setDetectMonitors(async () => [{ id: 'test-monitor', left: 0, top: 0, width: 1920, height: 1080, scale: 1, primary: true }])
   vi.useFakeTimers()
   wp.__resetForTests()
   vi.clearAllMocks()
@@ -143,6 +145,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  __resetDetectMonitors()
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
@@ -273,6 +276,20 @@ describe('WALL-02: Filename + retention', () => {
 // --- WALL-03: cross-platform guard ---
 
 describe('WALL-03: cross-platform guard', () => {
+  it('keeps the existing Windows wallpaper when no real monitor has been detected', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    __setDetectMonitors(async () => [])
+    const applyFn = vi.fn()
+    wp.setApplyWallpaper(applyFn)
+
+    await wp.generateAndApplyWallpaper()
+
+    expect(applyFn).not.toHaveBeenCalled()
+    const page = await getMockPage()
+    expect(page).toBeUndefined()
+    expect(logger.error).toHaveBeenCalled()
+  })
+
   it('T7: on non-Windows platform, applyWallpaperImpl is NOT called after screenshot', async () => {
     // Stub platform as non-win32
     vi.stubGlobal('process', { ...process, platform: 'linux' })

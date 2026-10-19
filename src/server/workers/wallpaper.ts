@@ -68,7 +68,11 @@ function buildWallpaperUrl(target: WallpaperTarget): string {
 /** The monitor to render for (Settings > Wallpaper > monitor; default primary). */
 async function currentTarget(): Promise<WallpaperTarget> {
   const chosen = getSetting('wallpaperMonitor') || 'primary'
-  return pickTarget(await listMonitors(), chosen)
+  const monitors = await listMonitors()
+  if (process.platform === 'win32' && monitors.length === 0) {
+    throw new Error('wallpaper: no known monitor; keeping the current wallpaper until detection recovers')
+  }
+  return pickTarget(monitors, chosen)
 }
 
 let contextKey = ''
